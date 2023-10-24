@@ -1,61 +1,34 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h> // printf
+#include <errno.h>
 #include "serial_transport.h"
-#include "mac.h"
 
 #define FRAME_CHECK_SEQUENCE_SIZE 2
 #define FRAME_PAYLOAD_LENGTH_SIZE 2
+#define FRAME_START_CODE 0x56
+#define FRAME_END_CODE 0x9E
+#define ESCAPE_SEQ_CODE 0xCC
+#define FRAME_START_ESC_SEQ (~FRAME_START_CODE & 0xff)
+#define FRAME_END_ESC_SEQ  (~FRAME_END_CODE & 0xff)
+#define ESCAPE_SEQ_ESC_SEQ (~ESCAPE_SEQ_CODE & 0xff)
 
-static uint8_t frame_guard[] = {'P', 'H', 'C', 'M'};
+
 static mac_t transport_mac;
 static int transport_timeout;
 static uint8_t buffer[1024];
 
 /**
- * @brief Structure to hold a frame
+ * @brief Calculate inverted 16-bit two's complement frame checksum.
  * 
- * No need for packing here since we won't send this
- * as is due to variable legth of payload
-*/
-typedef struct
-{
-    uint32_t guard;
-    uint16_t payload_size;
-    uint8_t * payload;
-    uint16_t fcs;
-} frame_t;
-
-
-/**
- * @brief Calculate 16-bit two's complement frame checksum.
+ * Pads data implicitly with zero byte to calulate checksum.
+ * This function will not work on big-endian machines.
  * 
- * @param [in] frame - Frame of type frame_t.
- * @return uint16_t - Frame check sequence in host endianess.
+ * @param [in] data - Pointer to data for checksum calculation.
+ * @param [in] size - Number of bytes in data.
+ * @return uint16_t - Frame check sequence.
  */
-/* static uint16_t calculate_frame_checksum(uint16_t payload_size, uint8_t *payload)
-{
-    uint16_t checksum = 0U;
-
-    checksum += payload_size;
-
-    for (uint16_t index = 0; index < payload_size; index++)
-    {
-        uint8_t nextByte = payload[index];
-
-        if ((index % 2) == 0)
-        {
-            checksum += (uint16_t) nextByte;
-        }
-        else
-        {
-            checksum += ((uint16_t) nextByte) << 8;
-        }
-    }
-    return ~checksum;
-}
- */
-static uint16_t calculate_frame_checksum(uint16_t size, uint8_t *data)
+static uint16_t calculate_frame_checksum(int size, uint8_t *data)
 {
     uint16_t checksum = 0U;
 
@@ -75,7 +48,7 @@ static uint16_t calculate_frame_checksum(uint16_t size, uint8_t *data)
     return ~checksum;
 }
 
-int read_until(void)
+int discard_until(uint8_t code)
 {
     bool pattern_detected = false;
     int status;
@@ -83,57 +56,90 @@ int read_until(void)
     uint8_t timeout = 5;
     // TODO proper timeout implementation
     //timer = Timer(self.timeout)
-    while(!pattern_detected && timeout)// && not timer.expired())
+    while(!pattern_detected)// && not timer.expired())
     {
-        for(uint8_t i = 0; i < sizeof(frame_guard); i++)
-        {
-            status = transport_mac.read(1, &data);
-            if(status < 0){
+        status = transport_mac.read(1, &data);
+        if(status < 0){
+            // TODO: error logging handling here
+            perror("Transport error with: ");
+            break;
+        }else if(status == 1) {
+            if(data == code){
+                pattern_detected = true;
+            } else {
                 break;
-            }else if(status == 1) {
-                if(data != frame_guard[i]){
-                    break;
-                } else if(i == sizeof(frame_guard) - 1){
-                    pattern_detected = true;
-                }
             }
         }
-        timeout--;
         //if timer.expired():
         //    raise TimeoutError("Timeout while waiting for frame start pattern")
     }
     if(pattern_detected){
-        return 0;
-    } else {
-        return -1;
+        status = 0;
     }
+    return status;
+}
+
+int read_until(uint8_t code, int *size, uint8_t *data){
+    bool pattern_detected = false;
+    int status = 0;
+    uint8_t tmp;
+    uint8_t *pdata = data;
+    uint8_t timeout = 5;
+    // TODO proper timeout implementation
+    //timer = Timer(self.timeout)
+    while(!pattern_detected)// && not timer.expired())
+    {
+        status = transport_mac.read(1, &tmp);
+
+        if(status < 0){
+            // TODO: error logging handling here
+            perror("Transport error with: ");
+            break;
+        }else if(status == 1) {
+            if(tmp == code){
+                pattern_detected = true;
+            } else {
+                *pdata = tmp;
+                pdata++;
+            }
+        }
+        //if timer.expired():
+        //    raise TimeoutError("Timeout while waiting for frame start pattern")
+    }
+    *size = pdata - data;
+    if(pattern_detected){
+        status = 0;
+    }
+    return status;
 }
 
 void service_transport(void)
 {
     enum transport_state {
-        GUARD_SYNC = 0,
-        RECEIVE_DATA = 1
+        FRAME_START_SYNC = 0,
+        RECEIVE_FRAME = 1,
     };
-    static enum transport_state state = GUARD_SYNC;
+    static enum transport_state state = FRAME_START_SYNC;
     switch(state)
     {
-        case GUARD_SYNC:
-            if(read_until())
-            {
-                state = RECEIVE_DATA;
-            }
+        case FRAME_START_SYNC:
+            state = RECEIVE_FRAME;
+            break;
+        case RECEIVE_FRAME:
+            state = FRAME_START_SYNC;
+            break;
     }
 
 }
 
-int init(mac_t *mac, int timeout){
+static int init(mac_t *mac, int timeout){
     transport_mac.open = mac->open;
     transport_mac.close = mac->close;
     transport_mac.read = mac->read;
     transport_mac.write = mac->write;
     transport_mac.init = mac->init;
     transport_timeout = timeout;
+    return 0;
 }
 
 static int open(void){
@@ -144,52 +150,146 @@ static int close(void){
     return transport_mac.close();
 }
 
-static int read(int *size, uint8_t *data){
-    frame_t frame;
-    // TODO check return code
-    if(read_until() < 0){
-        return -1;
-    }
-    transport_mac.read(2, buffer);
-    // should do a ntoh here
-    frame.payload_size = *((uint16_t *) buffer);
-    uint16_t data_read = 0;
+static void encode_frame_payload(int data_size, uint8_t *data, uint8_t *encoded_data, int *encoded_data_size){
+    uint8_t code;
+    int size = 0;
 
-    // pass size by reference and update this if we get less
-    uint16_t status = transport_mac.read(frame.payload_size + FRAME_CHECK_SEQUENCE_SIZE, &buffer[2]);
-    if(status < 0){
-        return -1;
+    for(int i = 0; i < data_size; i++)
+    {
+        code = data[i];
+        if(code == FRAME_START_CODE){
+            encoded_data[size] = ESCAPE_SEQ_CODE;
+            size += 1;
+            encoded_data[size] = FRAME_START_ESC_SEQ;
+            size += 1;
+        } else if(code == FRAME_END_CODE){
+            encoded_data[size] = ESCAPE_SEQ_CODE;
+            size += 1;
+            encoded_data[size] = FRAME_END_ESC_SEQ;
+            size += 1;
+        } else if(code == ESCAPE_SEQ_CODE){
+            encoded_data[size] = ESCAPE_SEQ_CODE;
+            size += 1;
+            encoded_data[size] = ESCAPE_SEQ_ESC_SEQ;
+            size += 1;
+        } else {
+            encoded_data[size] = code;
+            size += 1;
+        }
     }
-    frame.fcs = *((uint16_t *) &buffer[FRAME_PAYLOAD_LENGTH_SIZE + frame.payload_size]);
-    printf("Got frame with: size=%d payload=0x", frame.payload_size);
-    for(int i = 0; i < frame.payload_size; i++){
-        printf("%02x", buffer[2+i]);
+    *encoded_data_size = size;
+}
+
+static int decode_frame_payload(int data_size, uint8_t *data, int *decoded_data_size, uint8_t *decoded_data){
+    bool escape_code = false;
+    uint8_t code;
+    int size = 0;
+    int status = 0;
+    
+    for(int i = 0; i < data_size; i++)
+    {
+        code = data[i];
+        if(escape_code){
+            if(code == FRAME_START_ESC_SEQ){
+                decoded_data[size] = FRAME_START_CODE;
+            } else if(code == FRAME_END_ESC_SEQ){
+                decoded_data[size] = FRAME_END_CODE;
+            } else if(code == ESCAPE_SEQ_ESC_SEQ){
+                decoded_data[size] = ESCAPE_SEQ_CODE;
+            } else {
+                // TODO: Log error
+                status = -1;
+                errno = EINVAL;
+                break;
+            }
+            size += 1;
+        } else {
+            if(code == ESCAPE_SEQ_CODE){
+                escape_code = true;
+            } else {
+                decoded_data[size] = code;
+                size += 1;
+            }
+        }
     }
-    printf(" fcs=0x%04x\n", frame.fcs);
-    uint16_t checksum = calculate_frame_checksum(FRAME_PAYLOAD_LENGTH_SIZE + frame.payload_size, buffer);
-    if(checksum != frame.fcs){
-        printf("Serial Transport: Frame check sequence verification failed");
-        return -1;
+    *decoded_data_size = size;
+    return status;
+}
+
+static void log_frame(int size, uint8_t *data){
+    int i = 0;
+    printf("size=%d payload=0x", size);
+    
+    for(; i < size - 2; i++){
+        printf("%02x", data[i]);
+    }
+    printf(" fcs=0x%04x\n", *((uint16_t *) &data[size - 2]));
+}
+
+static void print_hex_string(int size, uint8_t *buffer){
+    for(int i = 0; i < size; i++){
+        printf("%02x", buffer[i]);
     }
 }
 
-static int write(int size, uint8_t *data){
-    int frame_size = sizeof(frame_guard) + FRAME_PAYLOAD_LENGTH_SIZE + size + FRAME_CHECK_SEQUENCE_SIZE;
-    for(int i = 0; i < sizeof(frame_guard); i++)
-    {
-        buffer[i] = frame_guard[i];
+static int read(int *size, uint8_t *data){
+    int status;
+    uint16_t checksum;
+    int decoded_size;
+
+    status = discard_until(FRAME_START_CODE);
+    if(status < 0){
+        // TODO log error
+        return status;
+    }
+    status = read_until(FRAME_END_CODE, size, buffer);
+    if(status < 0){
+        perror("Frame reception failed with: ");
+        return status;
     }
     
-    *((uint16_t *) &buffer[4]) = (uint16_t) size;
-
-    for(int i = 0; i < size; i++)
-    {
-        buffer[i + 6] = data[i];
+    // decoding into the same buffer
+    status = decode_frame_payload(*size, buffer, &decoded_size, data);
+    if(status < 0){
+        // log error
+        return status;
     }
-    uint16_t frame_check_sequence = calculate_frame_checksum(size + FRAME_PAYLOAD_LENGTH_SIZE, &buffer[4]);
-    *((uint16_t *) &buffer[sizeof(frame_guard) + FRAME_CHECK_SEQUENCE_SIZE + size]) = frame_check_sequence;
+    *size = decoded_size;
+    uint16_t frame_checksum = *((uint16_t *) &data[*size - 2]);
+    printf("Got a frame: ");
+    log_frame(*size, data);
 
-    transport_mac.write(frame_size, buffer);
+    checksum = calculate_frame_checksum(*size - 2, data);
+    if(checksum != frame_checksum){
+        // TODO logging
+        printf("Serial Transport: Frame check sequence verification failed, calculated 0x%04x but got 0x%04x\n", checksum, frame_checksum);
+        return -1;
+    }
+    *size -= 2; // remove checksum size to get payload size
+    return 0;
+}
+
+static int write(int size, uint8_t *data){
+    int encoded_data_size = 0;
+    int buf_index = 0;
+
+    buffer[buf_index] = FRAME_START_CODE;
+    buf_index += 1;
+
+    uint16_t frame_check_sequence = calculate_frame_checksum(size, data);
+    encode_frame_payload(size, data, &buffer[buf_index], &encoded_data_size);
+    buf_index += encoded_data_size;
+    encode_frame_payload(2, (uint8_t *) &frame_check_sequence, &buffer[buf_index], &encoded_data_size);
+    buf_index += encoded_data_size;
+    
+    //*((uint16_t *) &buffer[buf_index]) = frame_check_sequence;
+    //buf_index += 2;
+
+    buffer[buf_index] = FRAME_END_CODE;
+    buf_index += 1;
+    printf("Sending frame: ");
+    log_frame(buf_index - 2, &buffer[1]);
+    return transport_mac.write(buf_index, buffer);
 }
 
 int get_serial_transport(transport_t *transport){

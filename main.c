@@ -3,6 +3,7 @@
 #include "version.h"
 #include "socket_mac.h"
 #include "serial_transport.h"
+#include "transport.h"
 
 uint8_t get_transfer_parameters_frame[] = {0x50, 0x48, 0x43, 0x4d, 0x02, 0x00, 0x80, 0x01, 0x7d, 0xfe};
 #define GET_TRANSFER_PARAMETERS_RETURN_FRAME_SIZE (4 + 2 + 5 + 2)
@@ -35,7 +36,7 @@ uint8_t get_transfer_parameters_lwftp_packet[] = {0x80, 0x01};
 void config_transport(void){
     mac_t mac;
     struct socket_config conf = {
-        .host = "172.30.224.1",
+        .host = "10.146.89.27",
         .port = 5559
     };
     get_socket_mac(&mac);
@@ -48,12 +49,31 @@ void config_transport(void){
     transport.write(sizeof(get_transfer_parameters_lwftp_packet), get_transfer_parameters_lwftp_packet);
     int size = 0;
     uint8_t buffer[1024];
-    transport.read(&size, buffer);
+    int status = transport.read(&size, buffer);
+    if(status < 0){
+        printf("Failed transport\n");
+        transport.close();
+        return;
+    }
     for(int i=0; i < size; i++){
         printf("%02X", buffer[i]);
     }
     printf("\n");
     transport.close();
+}
+
+void test_factories(void){
+    struct socket_config conf = {
+        .host = "172.30.224.1",
+        .port = 5559
+    };
+    mac_t mac;
+    get_socket_mac(&mac);
+    mac.init((void *) &conf);
+
+    transport_t transport;
+    get_transport(SERIAL_TRANSPORT, &transport);
+    transport.init(&mac, 2);
 }
 
 int main(int, char**){
