@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <unistd.h> // close()
 #include <strings.h> // bzero()
+#include <stdbool.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -14,6 +15,8 @@
 
 static int sock = 0;
 static struct sockaddr_in socket_address;
+static bool opened = false;
+
 /** Blocking socket implementation
  * 
 */
@@ -75,28 +78,47 @@ int mac_init(void *conf)
         return -1;
     }
 
+    // The send timeout will also set the connect timeout, which is very long otherwise ~75 seconds
+    // Maybe we should do this differently with poll/select
+    if(setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0){
+        perror("Socket MAC initialization failed with: ");
+        return -1;
+    }
+
     bzero(&socket_address, sizeof(socket_address));
     inet_pton(AF_INET, config->host, &(socket_address.sin_addr));
     socket_address.sin_family = AF_INET;
-    //printf("%d", config->port);
     socket_address.sin_port = htons(config->port);
+    opened = false;
     return 0;
 }
 
 int mac_open(void)
 {
+    if(opened){
+        errno = EBUSY;
+        return -EBUSY;
+    }
     if(connect(sock, (struct sockaddr *) &socket_address, sizeof(socket_address)) < 0){
-        perror("Socket MAC connect");
+        if(errno == EINPROGRESS){
+            fprintf(stderr, "Socket MAC connect timed out\n");
+        } else {
+            perror("Socket MAC connect failed with: ");
+        }
         close(sock);
-        return -1;
+        return -ETIMEDOUT;
     }
     return 0;
 }
 
 int mac_close(void)
 {
-    close(sock);
-    return 0;
+    if(opened){
+        close(sock);
+        return 0;
+    } else {
+        return -1;
+    }
 }
 
 int mac_read(int size, uint8_t *data)
