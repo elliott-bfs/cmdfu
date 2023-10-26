@@ -6,7 +6,7 @@ project(mdfu VERSION 0.1.0 LANGUAGES C)
 include(CTest)
 enable_testing()
 
-#lwftp.c serial_transport.c
+#mdfu.c serial_transport.c
 add_executable(mdfu main.c socket_mac.c serial_transport.c transport.c)
 # we need to add the build directory because some source files will
 # only be available there after configuration

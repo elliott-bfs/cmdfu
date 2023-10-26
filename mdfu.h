@@ -1,12 +1,12 @@
-#ifndef LWFTP_H
-#define LWFTP_H
+#ifndef MDFU_H
+#define MDFU_H
 #include <stdint.h>
 #include <stdbool.h>
 
-#define LWFTP_COMMAND_SIZE 1
-#define LWFTP_SEQUENCE_FIELD_SIZE 1
-#define LWFTP_DATA_MAX_SIZE 1024
-#define LWFTP_PACKET_BUFFER_SIZE (LWFTP_SEQUENCE_FIELD_SIZE + LWFTP_COMMAND_SIZE + LWFTP_DATA_MAX_SIZE)
+#define MDFU_COMMAND_SIZE 1
+#define MDFU_SEQUENCE_FIELD_SIZE 1
+#define MDFU_DATA_MAX_SIZE 1024
+#define MDFU_PACKET_BUFFER_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_COMMAND_SIZE + MDFU_DATA_MAX_SIZE)
 
 typedef enum
 {
@@ -15,7 +15,7 @@ typedef enum
     WRITE_CHUNK = 0x03U,
     GET_IMAGE_STATE = 0x04U,
     END_TRANSFER = 0x05U
-} lwftp_command_t;
+} mdfu_command_t;
 
 typedef enum
 {
@@ -24,7 +24,7 @@ typedef enum
     COMMAND_NOT_AUTHORIZED = 0x03U,
     TRANSPORT_FAILURE = 0x04U,
     ABORT_TRANSFER = 0x05U
-} lwftp_response_status_t;
+} mdfu_response_status_t;
 
 
 
@@ -47,11 +47,11 @@ typedef struct
         uint8_t status;
     };
     uint16_t data_length;
-    uint8_t data[LWFTP_DATA_MAX_SIZE];
-}lwftp_packet_t;
+    uint8_t data[MDFU_DATA_MAX_SIZE];
+}mdfu_packet_t;
 
 struct packet_buffer {
     uint8_t size;
-    uint8_t buffer[LWFTP_PACKET_BUFFER_SIZE];
+    uint8_t buffer[MDFU_PACKET_BUFFER_SIZE];
 };
 #endif

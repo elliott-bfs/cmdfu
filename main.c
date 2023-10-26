@@ -31,7 +31,7 @@ void config_mac(void){
     mac.close();
 }
 
-uint8_t get_transfer_parameters_lwftp_packet[] = {0x80, 0x01};
+uint8_t get_transfer_parameters_mdfu_packet[] = {0x80, 0x01};
 
 void config_transport(void){
     mac_t mac;
@@ -46,7 +46,7 @@ void config_transport(void){
     get_serial_transport(&transport);
     transport.init(&mac, 2);
     transport.open();
-    transport.write(sizeof(get_transfer_parameters_lwftp_packet), get_transfer_parameters_lwftp_packet);
+    transport.write(sizeof(get_transfer_parameters_mdfu_packet), get_transfer_parameters_mdfu_packet);
     int size = 0;
     uint8_t buffer[1024];
     int status = transport.read(&size, buffer);
