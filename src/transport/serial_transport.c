@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stdio.h> // printf
 #include <errno.h>
-#include "serial_transport.h"
+#include "mdfu/serial_transport.h"
 
 #define FRAME_CHECK_SEQUENCE_SIZE 2
 #define FRAME_PAYLOAD_LENGTH_SIZE 2

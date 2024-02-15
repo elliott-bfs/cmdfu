@@ -1,8 +1,8 @@
 #ifndef SERIAL_TRANSPORT_H
 #define SERIAL_TRANSPORT_H
 
-#include "mac.h"
-#include "transport.h"
+#include "mdfu/mac.h"
+#include "mdfu/transport.h"
 
 int get_serial_transport(transport_t *transport);
 

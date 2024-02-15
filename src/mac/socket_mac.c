@@ -10,7 +10,7 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h> // inet_pton
-#include "socket_mac.h"
+#include <mdfu/socket_mac.h>
 
 
 static int sock = 0;
@@ -95,6 +95,7 @@ int mac_init(void *conf)
 
 int mac_open(void)
 {
+    puts("MAC opened\n");
     if(opened){
         errno = EBUSY;
         return -EBUSY;
