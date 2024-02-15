@@ -34,7 +34,7 @@
     - +:test/**
     - -:test/support
   :source:
-    - ../
+    - +:../
     - -:../build/
   :support:
     - test/support
@@ -59,6 +59,10 @@
   :plugins:
     - :ignore
     - :callback
+    - :expect_any_args
+    - :return_thru_ptr
+    - :ignore_arg
+
   :treat_as:
     uint8:    HEX8
     uint16:   HEX16
@@ -99,4 +103,10 @@
   :enabled:
     - stdout_pretty_tests_report
     - module_generator
+
+:module_generator:
+  :project_root: ./
+  :source_root:  ../
+  :test_root: test/
+
 ...
