@@ -22,6 +22,20 @@ ceedling new test
 ```
 This will create a test directory containing ceedling test framework for the project.
 
+### Running ceedling locally
+
+To execute all tests run the following command in the test directory
+```
+ceedling test
+```
+The 
+
+To a single test use
+```
+ceedling test:<test name or source file name>
+```
+e.g. `ceedling test:mdfu_client_info.c` or `ceedling test:mdfu_client_info`
+
 ### Running ceedling in docker
 
 ```bash

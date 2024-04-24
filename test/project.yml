@@ -34,7 +34,8 @@
     - +:test/**
     - -:test/support
   :source:
-    - +:../
+    - +:../include/
+    - +:../src/**
     - -:../build/
   :support:
     - test/support
