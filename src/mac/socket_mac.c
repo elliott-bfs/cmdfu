@@ -10,8 +10,8 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h> // inet_pton
-#include <mdfu/socket_mac.h>
-
+#include "mdfu/socket_mac.h"
+#include "mdfu/logging.h"
 
 static int sock = 0;
 static struct sockaddr_in socket_address;
@@ -66,7 +66,7 @@ int mac_init(void *conf)
         .tv_sec = 5,
         .tv_usec = 0
     };
-
+    DEBUG("Initializing socket MAC");
     sock = socket(PF_INET, SOCK_STREAM, 0);
     if(sock < 0) {
 		perror("Socket MAC init");
@@ -143,10 +143,15 @@ int mac_write(int size, uint8_t *data)
     return status;
 }
 
-void get_socket_mac(struct mac * mac){
-    mac->init = mac_init;
-    mac->open = mac_open;
-    mac->close = mac_close;
-    mac->read = mac_read;
-    mac->write = mac_write;
+mac_t network_mac = {
+    .open = mac_open,
+    .close = mac_close,
+    .init = mac_init,
+    .write = mac_write,
+    .read = mac_read
+};
+
+
+void get_socket_mac(mac_t **mac){
+    *mac = &network_mac;
 }

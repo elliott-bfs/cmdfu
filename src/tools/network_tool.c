@@ -1,51 +1,112 @@
-#pragma once
 #include <getopt.h>
-#include "tools.h"
-#include "mac.h"
-
-typedef struct {
-    int (* get_transport)(int, char **, transport_t *);
-    void (* list_supported_tools)(void);
-}tool_t;
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include "mdfu/tools.h"
+#include "mdfu/tools/network.h"
+#include "mdfu/mac.h"
+#include "mdfu/socket_mac.h"
+#include "mdfu/logging.h"
 
 #define TOOL_PARAMETERS_HELP "\
 --host <host>: e.g. 127.0.0.1\n\
 --port <port> e.g. 5559\n"
 
-static int parse_args(int argc, char **argv, struct socket_config *conf){
+static mac_t *net_mac = NULL;
+static transport_t *net_transport = NULL;
+
+static int open(void){
+    DEBUG("Opening network tool");
+    if(net_transport != NULL){
+        return net_transport->open();
+    }
+    return -1;
+}
+
+static int close(void){
+    DEBUG("Closing network tool");
+    if(net_transport != NULL){
+        return net_transport->close();
+    }
+    return -1;
+}
+
+static int init(void *config){
+    struct network_config *net_conf = (struct network_config *) config;
+    int status = 0;
+    DEBUG("Initializing network tool");
+    get_socket_mac(&net_mac);
+    if(0 == status){
+        status = net_mac->init((void *) &net_conf->socket_config);
+        if(status < 0){
+            ERROR("Socket MAC init failed");
+        }
+        if(0 == status){
+            status = get_transport(SOCKET_TRANSPORT, net_transport);
+            if(0 == status){
+                status = net_transport->init(net_mac, 2);
+            }
+        }
+    }
+    if(status < 0){
+        net_mac = NULL;
+        net_transport = NULL;
+    }
+    return status;
+}
+
+static int read(int *size, uint8_t *data){
+    if(net_transport != NULL){
+        return net_transport->read(size, data);
+    } else{
+        return -1;
+    }
+}
+
+static int write(int size, uint8_t *data){
+    if(net_transport != NULL){
+        return net_transport->write(size, data);
+    } else {
+        return -1;
+    }
+}
+
+static int parse_arguments(int tool_argc, char **tool_argv, void **config){
     int opt;
     static struct option long_options[] =
     {
         {"host", required_argument, 0, 'h'},
         {"port", required_argument, 0, 'p'},
+        // Indicator for end of options list
         {0, 0, 0, 0}
     };
+    *config = malloc(sizeof(struct network_config));
+    struct network_config *net_conf = (struct network_config *) *config;
+    
+    // Setting optind to zero triggers a re-initialization of the getopt parsing
+    // library. This also sets the optind to the default value of 1 after the
+    // initialization, thus we have a dummy value as first element in the array.
+    optind = 0;
     while (1)
     {
-        /* getopt_long stores the option index here. */
         int option_index = 0;
 
-        opt = getopt_long(argc, argv, "h:p:",
+        opt = getopt_long(tool_argc, tool_argv, "h:p:",
                         long_options, &option_index);
 
         /* Detect the end of the options. */
-        if (opt == -1)
+        if (opt == -1){
             break;
+        }
 
         switch (opt) {
-            case 0:
-                puts("Should not happen");
-                break;
-
             case 'h':
-                printf("option -h with value `%s'\n", optarg);
-                conf->host = malloc(strlen(optarg));
-                strcpy(conf->host, optarg);
+                net_conf->socket_config.host = malloc(strlen(optarg) + 1);
+                strcpy(net_conf->socket_config.host, optarg);
                 break;
 
             case 'p':
-                printf("option -p with value `%s'\n", optarg);
-                conf->port = atoi(optarg);
+                net_conf->socket_config.port = atoi(optarg);
                 break;
 
             case '?':
@@ -59,28 +120,15 @@ static int parse_args(int argc, char **argv, struct socket_config *conf){
     return 0;
 }
 
-static int get_transport(int argc, char **argv, transport_t *transport){
-    mac_t mac;
-    struct socket_config conf = {
-        .host = "127.0.0.1",
-        .port = 5559
-    };
-    if(parse_network_args(argc, argv, &conf) < 0)
-    {
-        return -1;
-    }
-    puts("Initializing stack");
-    get_socket_mac(&mac);
-    if(mac.init((void *) &conf) < 0) {
-        puts("Socket MAC init failed");
-        return -1;
-    }
-    get_serial_transport(transport);
-    transport->init(&mac, 2);
-    return 0;
-
-}
-
 static char *get_help(void){
     return TOOL_PARAMETERS_HELP;
 }
+
+tool_t network_tool = {
+    .open = open,
+    .close = close,
+    .init = init,
+    .write = write,
+    .read = read,
+    .parse_arguments = parse_arguments
+};

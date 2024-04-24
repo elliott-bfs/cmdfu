@@ -9,7 +9,8 @@ int get_transport(transport_type_t type, struct transport *transport){
             get_serial_transport(transport);
             break;
         default:
-            return EINVAL;
+            errno = EINVAL;
+            return -EINVAL;
     }
     return 0;
 

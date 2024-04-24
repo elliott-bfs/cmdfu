@@ -3,7 +3,8 @@
 
 #include <stdio.h>
 
-
+extern int debug_level;
+extern FILE *dbgstream;
 /*
 The do and while (0) are a kludge to make it possible to write
 logger(level, format, ...);
@@ -67,6 +68,4 @@ which the resemblance of logger() to a function would make C programmers want to
 void init_logging(FILE *logstream);
 void set_debug_level(int level);
 
-extern FILE *dbgstream;
-extern int  debug_level;
 #endif

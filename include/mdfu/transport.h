@@ -17,6 +17,6 @@ typedef struct transport {
     int (* write)(int, uint8_t *);
 } transport_t;
 
-int get_transport(transport_type_t type, struct transport *transport);
+int get_transport(transport_type_t type, transport_t *transport);
 
 #endif
