@@ -75,10 +75,12 @@ static const char *MDFU_TRANSPORT_ERROR_CAUSE_STR[] = {
 };
 
 static uint16_t chunk_size;
-static transport_t mdfu_transport;
+static transport_t *mdfu_transport;
 static uint8_t sequence_number;
 static int send_retries;
 static client_info_t client_info;
+static bool client_info_valid = false;
+static float default_timeout = 1;
 
 static void log_error_cause(mdfu_packet_t *status_packet);
 int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_packet);
@@ -231,29 +233,37 @@ int mdfu_init(transport_t *transport, int retries){
     mdfu_transport = transport;
     sequence_number = 0;
     send_retries = retries;
-
+    client_info_valid = false;
 }
 
 // TODO it would be better to send in a struct containing functions for reading chunks
 // this would be a good abstraction because then we can offer multiple ways to
 // read the image file piecewise instead of everything at once
-int mdfu_run_upgrade(uint8_t *image, int image_size){
+int mdfu_run_update(FILE *image){
     mdfu_packet_t mdfu_cmd_packet;
     mdfu_packet_t mdfu_response_packet;
 
-    if(mdfu_transport.open() < 0){
+    if(mdfu_transport->open() < 0){
         perror("MDFU update failed: ");
     }
-    
-    mdfu_cmd_packet.command = GET_CLIENT_INFO;
-    mdfu_cmd_packet.data = NULL;
-    mdfu_cmd_packet.data_length = 0;
-    mdfu_cmd_packet.sync = true;
-    if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_response_packet) < 0){
-        mdfu_transport.close();
+    if(mdfu_get_client_info(&client_info) < 0){
         return -1;
+    }
+    client_info_valid = true;
+    
+    mdfu_transport->close();
+}
+int mdfu_start_transfer(void){
+    mdfu_packet_t mdfu_status_packet;
+    mdfu_packet_t mdfu_cmd_packet = {
+        .command = START_TRANSFER,
+        .sync = true,
+        .data_length = 0
     };
-    mdfu_transport.close();
+
+    if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
+        return -1;
+    }
 }
 /**
  * @brief 
@@ -267,6 +277,12 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
     mdfu_packet_buffer_t rx_packet_buffer;
     int status;
     int retries = send_retries;
+    float cmd_timeout = default_timeout;
+
+    if(client_info_valid){
+        cmd_timeout = client_info.cmd_timeouts[mdfu_cmd_packet->command] * SECONDS_PER_LSB;
+    }
+    mdfu_cmd_packet->sequence_number = mdfu_cmd_packet->sync ? sequence_number : 0;
 
     mdfu_encode_cmd_packet_cp(mdfu_cmd_packet, (uint8_t *) &packet_buffer.buffer, &packet_buffer.size);
 
@@ -275,11 +291,11 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
 
     while(retries){
         retries -= 1;
-        status = mdfu_transport.write(packet_buffer.size, packet_buffer.buffer);
+        status = mdfu_transport->write(packet_buffer.size, packet_buffer.buffer);
         if(status < 0){
             break;
         }
-        status = mdfu_transport.read(&rx_packet_buffer.size, rx_packet_buffer.buffer);
+        status = mdfu_transport->read(&rx_packet_buffer.size, rx_packet_buffer.buffer, cmd_timeout);
         if(status < 0){
             break;
         }
@@ -418,6 +434,12 @@ int mdfu_decode_client_info(uint8_t *data, int length, client_info_t *client_inf
     }
 }
 
+/**
+ * @brief Get MDFU client info
+ * 
+ * @param client_info Pointer to client_info_t struct to store the data.
+ * @return int Success=0, Error=-1
+ */
 int mdfu_get_client_info(client_info_t *client_info){
     mdfu_packet_t mdfu_status_packet;
     mdfu_packet_t mdfu_cmd_packet = {
@@ -430,9 +452,17 @@ int mdfu_get_client_info(client_info_t *client_info){
     if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
         return -1;
     }
+    if(mdfu_decode_client_info(mdfu_status_packet.data, mdfu_status_packet.data_length, client_info) < 0){
+        return -1;
+    }
     return 0;
 }
 
+/**
+ * @brief Print client info in human readable form to stdout
+ * 
+ * @param client_info Pointer to client_info_t struct
+ */
 void print_client_info(client_info_t *client_info){
     char internal_version[6];
     if(client_info->version.internal_present)
@@ -469,8 +499,8 @@ void print_client_info(client_info_t *client_info){
  * @return int, 0 for success and -1 for error.
  */
 int mdfu_open(void){
-    if(transport.open() < 0){
-        perror("MDFU failed to open transport: ");
+    if(mdfu_transport->open() < 0){
+        DEBUG("MDFU failed to open transport");
         return -1;
     }
     return 0;
@@ -482,8 +512,8 @@ int mdfu_open(void){
  * @return int, 0 for success and -1 for error.
  */
 int mdfu_close(void){
-    if(0 > transport.close()){
-        perror("MDFU failed to close transport: ");
+    if(0 > mdfu_transport->close()){
+        DEBUG("MDFU failed to close transport");
         return -1;
     }
     return 0;

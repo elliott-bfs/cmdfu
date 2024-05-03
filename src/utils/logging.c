@@ -2,6 +2,7 @@
 
 FILE *dbgstream;
 int  debug_level = ERRORLEVEL;
+const char* ERROR_LEVEL_NAMES[] = {"NONE", "ERROR", "WARNING", "INFO", "DEBUG"};
 
 void init_logging(FILE *logstream){
     if(logstream){

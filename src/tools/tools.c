@@ -4,7 +4,7 @@
 #include "mdfu/tools/network.h"
 #include "mdfu/logging.h"
 
-int get_tool(char *name, tool_t **tool){
+int get_tool_by_name(char *name, tool_t **tool){
     if(0 == strcmp(name, "network")){
         *tool = &network_tool;
     } else {
@@ -20,7 +20,7 @@ int get_tool_by_type(tool_type_t tool_type, tool_t **tool){
             break;
 
         default:
-            ERROR("Serial tool not implemented");
+            ERROR("No tool specified or tool not implemented");
             errno = EINVAL;
             return -EINVAL;
             break;

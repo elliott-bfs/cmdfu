@@ -1,5 +1,6 @@
 #ifndef MDFU_H
 #define MDFU_H
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include "mdfu/transport.h"
@@ -100,4 +101,5 @@ int mdfu_init(transport_t *transport, int retries);
 int mdfu_open(void);
 int mdfu_close(void);
 int mdfu_get_client_info(client_info_t *client_info);
+int mdfu_run_update(FILE *image);
 #endif

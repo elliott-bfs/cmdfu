@@ -2,7 +2,7 @@
 #include "mdfu/transport.h"
 #include "mdfu/serial_transport.h"
 
-int get_transport(transport_type_t type, struct transport *transport){
+int get_transport(transport_type_t type, transport_t **transport){
     
     switch(type){
         case SERIAL_TRANSPORT:
@@ -13,5 +13,4 @@ int get_transport(transport_type_t type, struct transport *transport){
             return -EINVAL;
     }
     return 0;
-
 }

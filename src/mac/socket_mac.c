@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include <errno.h>
 #include <unistd.h> // close()
 #include <strings.h> // bzero()
@@ -95,20 +96,25 @@ int mac_init(void *conf)
 
 int mac_open(void)
 {
-    puts("MAC opened\n");
+    DEBUG("Opening socket MAC");
     if(opened){
         errno = EBUSY;
         return -EBUSY;
     }
+    char buf[64];
+    inet_ntop (AF_INET, &socket_address.sin_addr, buf, sizeof(buf));
+    DEBUG("Connecting to host %s on port %d",buf , ntohs(socket_address.sin_port));
+
     if(connect(sock, (struct sockaddr *) &socket_address, sizeof(socket_address)) < 0){
         if(errno == EINPROGRESS){
-            fprintf(stderr, "Socket MAC connect timed out\n");
+            ERROR("Socket MAC connect timed out");
         } else {
-            perror("Socket MAC connect failed with: ");
+            ERROR("Socket MAC connect failed with: %s", strerror(errno));
         }
         close(sock);
         return -ETIMEDOUT;
     }
+    opened = true;
     return 0;
 }
 
@@ -116,6 +122,7 @@ int mac_close(void)
 {
     if(opened){
         close(sock);
+        opened = false;
         return 0;
     } else {
         return -1;

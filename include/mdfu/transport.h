@@ -13,10 +13,10 @@ typedef struct transport {
     int (* init)(mac_t *, int timeout);
     int (* open)(void);
     int (* close)(void);
-    int (* read)(int *, uint8_t *);
+    int (* read)(int *, uint8_t *, float);
     int (* write)(int, uint8_t *);
 } transport_t;
 
-int get_transport(transport_type_t type, transport_t *transport);
+int get_transport(transport_type_t type, transport_t **transport);
 
 #endif

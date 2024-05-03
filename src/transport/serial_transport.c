@@ -113,25 +113,6 @@ int read_until(uint8_t code, int *size, uint8_t *data){
     return status;
 }
 
-void service_transport(void)
-{
-    enum transport_state {
-        FRAME_START_SYNC = 0,
-        RECEIVE_FRAME = 1,
-    };
-    static enum transport_state state = FRAME_START_SYNC;
-    switch(state)
-    {
-        case FRAME_START_SYNC:
-            state = RECEIVE_FRAME;
-            break;
-        case RECEIVE_FRAME:
-            state = FRAME_START_SYNC;
-            break;
-    }
-
-}
-
 static int init(mac_t *mac, int timeout){
     transport_mac.open = mac->open;
     transport_mac.close = mac->close;
@@ -232,7 +213,7 @@ static void print_hex_string(int size, uint8_t *buffer){
     }
 }
 
-static int read(int *size, uint8_t *data){
+static int read(int *size, uint8_t *data, float timeout){
     int status;
     uint16_t checksum;
     int decoded_size;
@@ -281,9 +262,6 @@ static int write(int size, uint8_t *data){
     buf_index += encoded_data_size;
     encode_frame_payload(2, (uint8_t *) &frame_check_sequence, &buffer[buf_index], &encoded_data_size);
     buf_index += encoded_data_size;
-    
-    //*((uint16_t *) &buffer[buf_index]) = frame_check_sequence;
-    //buf_index += 2;
 
     buffer[buf_index] = FRAME_END_CODE;
     buf_index += 1;
@@ -292,10 +270,15 @@ static int write(int size, uint8_t *data){
     return transport_mac.write(buf_index, buffer);
 }
 
-int get_serial_transport(transport_t *transport){
-    transport->close = close;
-    transport->open = open;
-    transport->read = read;
-    transport->write = write;
-    transport->init = init;
+transport_t serial_transport ={
+    .close = close,
+    .open = open,
+    .read = read,
+    .write = write,
+    .init = init
+};
+
+int get_serial_transport(transport_t **transport){
+    *transport = &serial_transport;
+    return 0;
 }

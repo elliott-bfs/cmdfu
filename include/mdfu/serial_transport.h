@@ -4,6 +4,6 @@
 #include "mdfu/mac.h"
 #include "mdfu/transport.h"
 
-int get_serial_transport(transport_t *transport);
+int get_serial_transport(transport_t **transport);
 
 #endif

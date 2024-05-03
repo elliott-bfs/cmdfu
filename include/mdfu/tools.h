@@ -2,13 +2,11 @@
 #include "transport.h"
 
 typedef struct {
+    transport_t ops;
     int (* init)(void *config);
-    int (* open)(void);
-    int (* close)(void);
-    int (* read)(int *, uint8_t *);
-    int (* write)(int, uint8_t *);
     void (* list_connected_tools)(void);
     int (* parse_arguments)(int tool_argc, char **tool_argv, void **config);
+    char *(* get_parameter_help)(void);
 }tool_t;
 
 typedef enum tool_type {

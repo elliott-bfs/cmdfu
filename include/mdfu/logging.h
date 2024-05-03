@@ -5,6 +5,7 @@
 
 extern int debug_level;
 extern FILE *dbgstream;
+extern const char* ERROR_LEVEL_NAMES[];
 /*
 The do and while (0) are a kludge to make it possible to write
 logger(level, format, ...);
@@ -15,11 +16,19 @@ which the resemblance of logger() to a function would make C programmers want to
 /*This does not work for C99 because if no arguments are given there will still be a comma
     logger(level, format, )
   */
+ #if 0
 #define logger(level, format, ...) do {  \
     if (level <= debug_level) { \
         fprintf(dbgstream,"%s:%d:" format "\n", __FILE__, __LINE__, ## __VA_ARGS__); \
     } \
 } while (0)
+#else
+#define logger(level, format, ...) do {  \
+    if (level <= debug_level) { \
+        fprintf(dbgstream,"%s:" format "\n", ERROR_LEVEL_NAMES[level], ## __VA_ARGS__); \
+    } \
+} while (0)
+#endif
 
 #else
 #define logger(level, ...) do {  \
