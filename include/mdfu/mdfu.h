@@ -90,16 +90,16 @@ typedef struct{
     uint16_t cmd_timeouts[MAX_MDFU_CMD - 1];
 }client_info_t;
 
-void mdfu_encode_cmd_packet(mdfu_packet_t *mdfu_packet, mdfu_packet_buffer_t *mdfu_packet_buffer);
+
 void mdfu_log_packet(mdfu_packet_t *packet, mdfu_packet_type_t type);
-void mdfu_decode_packet(mdfu_packet_t *packet, mdfu_packet_type_t type, mdfu_packet_buffer_t *packet_buffer);
-void mdfu_encode_cmd_packet_cp(mdfu_packet_t *mdfu_packet, uint8_t *encoded_packet, int *encoded_packet_size);
-int mdfu_decode_packet_cp(mdfu_packet_t *decoded_packet, mdfu_packet_type_t type, uint8_t *packet, int packet_size);
+void mdfu_encode_cmd_packet(mdfu_packet_t *mdfu_packet, uint8_t *encoded_packet, int *encoded_packet_size);
+int mdfu_decode_packet(mdfu_packet_t *decoded_packet, mdfu_packet_type_t type, uint8_t *packet, int packet_size);
 int mdfu_decode_client_info(uint8_t *data, int length, client_info_t *client_info);
-void print_client_info(client_info_t *client_info);
+
 int mdfu_init(transport_t *transport, int retries);
 int mdfu_open(void);
 int mdfu_close(void);
 int mdfu_get_client_info(client_info_t *client_info);
+void print_client_info(client_info_t *client_info);
 int mdfu_run_update(FILE *image);
 #endif

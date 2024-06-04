@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <endian.h>
+#include <stdlib.h>
 #include "mdfu/mdfu.h"
 #include "mdfu/logging.h"
 
@@ -26,6 +27,11 @@ typedef enum {
     BUFFER_INFO = 2,
     COMMAND_TIMEOUT = 3
 }client_info_type_t;
+
+typedef enum {
+    VALID = 1,
+    INVALID = 2
+}mdfu_image_state_t;
 
 /**
  * @brief MDFU command codes descriptions.
@@ -74,7 +80,6 @@ static const char *MDFU_TRANSPORT_ERROR_CAUSE_STR[] = {
     "Packet was too large"
 };
 
-static uint16_t chunk_size;
 static transport_t *mdfu_transport;
 static uint8_t sequence_number;
 static int send_retries;
@@ -84,6 +89,10 @@ static float default_timeout = 1;
 
 static void log_error_cause(mdfu_packet_t *status_packet);
 int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_packet);
+int mdfu_start_transfer(void);
+int mdfu_end_transfer(void);
+int mdfu_write_chunk(uint8_t *data, int size);
+int mdfu_get_image_state(mdfu_image_state_t *state);
 
 /**
  * @brief Increment the MDFU packet sequence number
@@ -125,22 +134,6 @@ void mdfu_log_packet(mdfu_packet_t *packet, mdfu_packet_type_t type){
     DEBUG("%s", (char *) &buf);
 }
 
-void mdfu_encode_cmd_packet(mdfu_packet_t *mdfu_packet, mdfu_packet_buffer_t *mdfu_packet_buffer){
-    // TODO verify parameters
-    // sequence number between 0 and 31
-    // command in known commands
-    // status in known status
-    if(mdfu_packet->sync){
-        mdfu_packet_buffer->buffer[0] |= MDFU_HEADER_SYNC;
-    }
-    mdfu_packet_buffer->buffer[1] = mdfu_packet->command;
-    
-    for(int i=0; i < mdfu_packet->data_length; i++)
-    {
-        mdfu_packet_buffer->buffer[i+2] = mdfu_packet->data[i];
-    }
-}
-
 /**
  * @brief Encode a MDFU packet.
  * 
@@ -148,7 +141,7 @@ void mdfu_encode_cmd_packet(mdfu_packet_t *mdfu_packet, mdfu_packet_buffer_t *md
  * @param encoded_packet Encoded MDFU packet
  * @param encoded_packet_size Size of the encoded MDFU packet
  */
-void mdfu_encode_cmd_packet_cp(mdfu_packet_t *mdfu_packet, uint8_t *encoded_packet, int *encoded_packet_size){
+void mdfu_encode_cmd_packet(mdfu_packet_t *mdfu_packet, uint8_t *encoded_packet, int *encoded_packet_size){
     uint8_t *buffer = (uint8_t *) encoded_packet;
 
     assert(32 > mdfu_packet->sequence_number);
@@ -177,7 +170,7 @@ void mdfu_encode_cmd_packet_cp(mdfu_packet_t *mdfu_packet, uint8_t *encoded_pack
  * @param packet Raw packet to decode
  * @param packet_size Size of the packet to decode
  */
-int mdfu_decode_packet_cp(mdfu_packet_t *decoded_packet, mdfu_packet_type_t type, uint8_t *packet, int packet_size){
+int mdfu_decode_packet(mdfu_packet_t *decoded_packet, mdfu_packet_type_t type, uint8_t *packet, int packet_size){
     assert(type == MDFU_CMD || type == MDFU_STATUS);
 
     if(type == MDFU_CMD){
@@ -207,28 +200,6 @@ int mdfu_decode_packet_cp(mdfu_packet_t *decoded_packet, mdfu_packet_type_t type
     return 0;
 }
 
-void mdfu_decode_packet(mdfu_packet_t *packet, mdfu_packet_type_t type, mdfu_packet_buffer_t *packet_buffer){
-    // TODO verify parameters
-    // sequence number between 0 and 31
-    // command in known commands
-    // status in known status
-    if(type == MDFU_CMD){
-        packet->sync = (packet_buffer->buffer[0] & MDFU_HEADER_SYNC) ? true : false;
-        packet->command = packet_buffer->buffer[1];
-    }else{
-        packet->resend = (packet_buffer->buffer[0] & MDFU_HEADER_RESEND) ? true : false;
-        packet->status = packet_buffer->buffer[1];
-    }
-    packet->sequence_number = packet_buffer->buffer[0] & MDFU_HEADER_SEQUENCE_NUMBER;
-    if(packet_buffer->size > 2){
-        packet->data = &packet_buffer->buffer[2];
-        packet->data_length = packet_buffer->size - 2;
-    } else {
-        packet->data = NULL;
-        packet->data_length = 0;
-    }
-}
-
 int mdfu_init(transport_t *transport, int retries){
     mdfu_transport = transport;
     sequence_number = 0;
@@ -243,21 +214,51 @@ int mdfu_run_update(FILE *image){
     mdfu_packet_t mdfu_cmd_packet;
     mdfu_packet_t mdfu_response_packet;
 
-    if(mdfu_transport->open() < 0){
-        perror("MDFU update failed: ");
-    }
     if(mdfu_get_client_info(&client_info) < 0){
-        return -1;
+        goto err_exit;
     }
     client_info_valid = true;
-    
-    mdfu_transport->close();
+    if(mdfu_start_transfer() < 0){
+        goto err_exit;
+    }
+    uint8_t *buf = malloc(client_info.buffer_size);
+    int size;
+    do{
+        size = fread(buf, 1, client_info.buffer_size, image);
+        if(size && !ferror(image)){
+            if(mdfu_write_chunk(buf, size) < 0){
+                goto err_exit;
+            }
+        }else if (feof(image)){
+            break;
+        }else{
+            ERROR("Reading FW image failed");
+            goto err_exit;
+        }
+    }while(true);
+    mdfu_image_state_t state;
+    if(mdfu_get_image_state(&state) < 0){
+        goto err_exit;
+    }
+    if(state != VALID){
+        ERROR("Image state is invalid");
+    }
+    if(mdfu_end_transfer() < 0){
+        goto err_exit;
+    }
+    free(buf);
+    return 0;
+
+
+    err_exit:
+    free(buf);
+    return -1;
 }
 int mdfu_start_transfer(void){
     mdfu_packet_t mdfu_status_packet;
     mdfu_packet_t mdfu_cmd_packet = {
         .command = START_TRANSFER,
-        .sync = true,
+        .sync = false,
         .data_length = 0
     };
 
@@ -265,6 +266,45 @@ int mdfu_start_transfer(void){
         return -1;
     }
 }
+
+int mdfu_end_transfer(void){
+    mdfu_packet_t mdfu_status_packet;
+    mdfu_packet_t mdfu_cmd_packet = {
+        .command = END_TRANSFER,
+        .sync = false,
+        .data_length = 0
+    };
+
+    if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
+        return -1;
+    }
+}
+int mdfu_get_image_state(mdfu_image_state_t *state){
+    mdfu_packet_t mdfu_status_packet;
+    mdfu_packet_t mdfu_cmd_packet = {
+        .command = GET_IMAGE_STATE,
+        .sync = false,
+        .data_length = 0
+    };
+
+    if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
+        return -1;
+    }
+}
+
+int mdfu_write_chunk(uint8_t *data, int size){
+    mdfu_packet_t mdfu_cmd_packet = {
+        .command = WRITE_CHUNK,
+        .sync = false,
+        .data_length = size,
+        .data = data
+    };
+    mdfu_packet_t mdfu_status_packet;
+    if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
+        return -1;
+    }
+}
+
 /**
  * @brief 
  * 
@@ -274,7 +314,7 @@ int mdfu_start_transfer(void){
  */
 int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_packet){
     mdfu_packet_buffer_t packet_buffer;
-    mdfu_packet_buffer_t rx_packet_buffer;
+    static mdfu_packet_buffer_t rx_packet_buffer;
     int status;
     int retries = send_retries;
     float cmd_timeout = default_timeout;
@@ -282,11 +322,11 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
     if(client_info_valid){
         cmd_timeout = client_info.cmd_timeouts[mdfu_cmd_packet->command] * SECONDS_PER_LSB;
     }
-    mdfu_cmd_packet->sequence_number = mdfu_cmd_packet->sync ? sequence_number : 0;
+    mdfu_cmd_packet->sequence_number = mdfu_cmd_packet->sync ? 0 : sequence_number;
 
-    mdfu_encode_cmd_packet_cp(mdfu_cmd_packet, (uint8_t *) &packet_buffer.buffer, &packet_buffer.size);
+    mdfu_encode_cmd_packet(mdfu_cmd_packet, (uint8_t *) &packet_buffer.buffer, &packet_buffer.size);
 
-    DEBUG("Sending MDFU command packet\n");
+    DEBUG("Sending MDFU command packet");
     mdfu_log_packet(mdfu_cmd_packet, MDFU_CMD);
 
     while(retries){
@@ -299,8 +339,8 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
         if(status < 0){
             break;
         }
-        mdfu_decode_packet_cp(mdfu_status_packet, MDFU_STATUS, (uint8_t *) &rx_packet_buffer.buffer, rx_packet_buffer.size);
-        DEBUG("Received MDFU status packet\n");
+        mdfu_decode_packet(mdfu_status_packet, MDFU_STATUS, (uint8_t *) &rx_packet_buffer.buffer, rx_packet_buffer.size);
+        DEBUG("Received MDFU status packet");
         mdfu_log_packet(mdfu_status_packet, MDFU_STATUS);
 
         if(mdfu_status_packet->resend){
@@ -517,8 +557,4 @@ int mdfu_close(void){
         return -1;
     }
     return 0;
-}
-
-void get_next_chunk(uint8_t *buffer, int size){
-
 }
