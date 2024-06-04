@@ -1,5 +1,7 @@
-#pragma once
-#include "transport.h"
+#ifndef TOOLS_H
+#define TOOLS_H
+
+#include "mdfu/transport.h"
 
 typedef struct {
     transport_t ops;
@@ -18,3 +20,4 @@ typedef enum tool_type {
 
 int get_tool_by_name(char *name, tool_t **tool);
 int get_tool_by_type(tool_type_t tool_type, tool_t **tool);
+#endif
