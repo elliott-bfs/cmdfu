@@ -5,8 +5,6 @@
 #include <stdbool.h>
 #include "mdfu/tools.h"
 #include "mdfu/tools/network.h"
-#include "mdfu/socket_mac.h"
-#include "mdfu/transport.h"
 #include "mdfu/logging.h"
 
 #define TOOL_PARAMETERS_HELP "\
@@ -14,8 +12,42 @@ Networking Tool Options:\n\
     --host <host>: e.g. 127.0.0.1\n\
     --port <port> e.g. 5559\n"
 
+/** @brief MAC layer pointer */
 static mac_t *net_mac = NULL;
+/** @brief Transport layer pointer */
 static transport_t *net_transport = NULL;
+
+/**
+ * @brief Networking tool initialization
+ * 
+ * @param config This is a struct network_config type for this tool but
+ * passed in as an opaque object here so that the tool API is agnostic
+ * to any specific tool implementations.
+ * @return int -1 for error and 0 for success
+ */
+static int init(void *config){
+    struct network_config *net_conf = (struct network_config *) config;
+    int status = 0;
+    DEBUG("Initializing network tool");
+    get_socket_mac(&net_mac);
+    if(0 == status){
+        status = net_mac->init((void *) &net_conf->socket_config);
+        if(status < 0){
+            ERROR("Socket MAC init failed");
+        }
+        if(0 == status){
+            status = get_transport(SERIAL_TRANSPORT, &net_transport);
+            if(0 == status){
+                status = net_transport->init(net_mac, 2);
+            }
+        }
+    }
+    if(status < 0){
+        net_mac = NULL;
+        net_transport = NULL;
+    }
+    return status;
+}
 
 static int open(void){
     DEBUG("Opening network tool");
@@ -31,30 +63,6 @@ static int close(void){
         return net_transport->close();
     }
     return -1;
-}
-
-static int init(void *config){
-    struct network_config *net_conf = (struct network_config *) config;
-    int status = 0;
-    DEBUG("Initializing network tool");
-    get_socket_mac(&net_mac);
-    if(0 == status){
-        status = net_mac->init((void *) &net_conf->socket_config);
-        if(status < 0){
-            ERROR("Socket MAC init failed");
-        }
-        if(0 == status){
-            status = get_serial_transport(&net_transport);//get_transport(SERIAL_TRANSPORT, &net_transport);
-            if(0 == status){
-                status = net_transport->init(net_mac, 2);
-            }
-        }
-    }
-    if(status < 0){
-        net_mac = NULL;
-        net_transport = NULL;
-    }
-    return status;
 }
 
 static int read(int *size, uint8_t *data, float timeout){
@@ -73,6 +81,18 @@ static int write(int size, uint8_t *data){
     }
 }
 
+/**
+ * @brief Parse tool argument vector.
+ *
+ * Parses the argument vector for valid tool arguments and returns
+ * a pointer to a configuration object that can be passed into
+ * the tool initialization function.
+ *
+ * @param tool_argc Argument count
+ * @param tool_argv Argument vector
+ * @param config Pointer to tool configuration object
+ * @return -1 for errors and 0 for success
+ */
 static int parse_arguments(int tool_argc, char **tool_argv, void **config){
     int opt;
     static struct option long_options[] =
@@ -115,7 +135,6 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
 
             case '?':
                 ERROR("Error encountered during tool argument parsing");
-                /* getopt_long already printed an error message. */
                 error_exit = true;
                 break;
             case ':':
@@ -145,7 +164,11 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
     }
     return 0;
 }
-
+/**
+ * @brief Get help on tools parameters.
+ *
+ * @return char* String with tool parameter help text
+ */
 static char *get_parameter_help(void){
     return TOOL_PARAMETERS_HELP;
 }
