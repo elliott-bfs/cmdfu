@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "mdfu/transport.h"
+#include "mdfu/image_reader.h"
 
 #define MDFU_COMMAND_SIZE 1
 #define MDFU_SEQUENCE_FIELD_SIZE 1
@@ -101,5 +102,5 @@ int mdfu_open(void);
 int mdfu_close(void);
 int mdfu_get_client_info(client_info_t *client_info);
 void print_client_info(client_info_t *client_info);
-int mdfu_run_update(FILE *image);
+int mdfu_run_update(image_reader_t *image_reader);
 #endif

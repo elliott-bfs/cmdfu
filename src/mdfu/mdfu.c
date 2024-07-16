@@ -9,8 +9,10 @@
 #include <assert.h>
 #include <endian.h>
 #include <stdlib.h>
+#include <string.h>
 #include "mdfu/mdfu.h"
 #include "mdfu/logging.h"
+#include "mdfu/image_reader.h"
 
 // Client info 
 #define PARAM_TYPE_SIZE  1
@@ -205,14 +207,13 @@ int mdfu_init(transport_t *transport, int retries){
     sequence_number = 0;
     send_retries = retries;
     client_info_valid = false;
+    return 0;
 }
 
-// TODO it would be better to send in a struct containing functions for reading chunks
-// this would be a good abstraction because then we can offer multiple ways to
-// read the image file piecewise instead of everything at once
-int mdfu_run_update(FILE *image){
-    mdfu_packet_t mdfu_cmd_packet;
-    mdfu_packet_t mdfu_response_packet;
+int mdfu_run_update(image_reader_t *image_reader){
+    uint8_t *buf = NULL;
+    mdfu_image_state_t state;
+    ssize_t size;
 
     if(mdfu_get_client_info(&client_info) < 0){
         goto err_exit;
@@ -221,27 +222,31 @@ int mdfu_run_update(FILE *image){
     if(mdfu_start_transfer() < 0){
         goto err_exit;
     }
-    uint8_t *buf = malloc(client_info.buffer_size);
-    int size;
+    buf = malloc(client_info.buffer_size);
+
     do{
-        size = fread(buf, 1, client_info.buffer_size, image);
-        if(size && !ferror(image)){
-            if(mdfu_write_chunk(buf, size) < 0){
-                goto err_exit;
-            }
-        }else if (feof(image)){
-            break;
-        }else{
-            ERROR("Reading FW image failed");
+        size = image_reader->read(buf, client_info.buffer_size);
+        if(0 > size){
+            ERROR("%s", strerror(errno));
             goto err_exit;
         }
+        if(0 == size){
+            break;// end of fw update image
+        }
+        if(mdfu_write_chunk(buf, size) < 0){
+            goto err_exit;
+        }
+        if(size < client_info.buffer_size){
+            break;//end of fw update image
+        }
     }while(true);
-    mdfu_image_state_t state;
+
     if(mdfu_get_image_state(&state) < 0){
         goto err_exit;
     }
     if(state != VALID){
-        ERROR("Image state is invalid");
+        ERROR("Image state %d is invalid", state);
+        goto err_exit;
     }
     if(mdfu_end_transfer() < 0){
         goto err_exit;
@@ -249,11 +254,13 @@ int mdfu_run_update(FILE *image){
     free(buf);
     return 0;
 
-
     err_exit:
-    free(buf);
+    if(NULL != buf){
+        free(buf);
+    }
     return -1;
 }
+
 int mdfu_start_transfer(void){
     mdfu_packet_t mdfu_status_packet;
     mdfu_packet_t mdfu_cmd_packet = {
@@ -265,6 +272,7 @@ int mdfu_start_transfer(void){
     if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
         return -1;
     }
+    return 0;
 }
 
 int mdfu_end_transfer(void){
@@ -278,6 +286,7 @@ int mdfu_end_transfer(void){
     if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
         return -1;
     }
+    return 0;
 }
 int mdfu_get_image_state(mdfu_image_state_t *state){
     mdfu_packet_t mdfu_status_packet;
@@ -290,6 +299,8 @@ int mdfu_get_image_state(mdfu_image_state_t *state){
     if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
         return -1;
     }
+    *state = mdfu_status_packet.data[0];
+    return 0;
 }
 
 int mdfu_write_chunk(uint8_t *data, int size){
@@ -303,6 +314,7 @@ int mdfu_write_chunk(uint8_t *data, int size){
     if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
         return -1;
     }
+    return 0;
 }
 
 /**
@@ -322,7 +334,10 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
     if(client_info_valid){
         cmd_timeout = client_info.cmd_timeouts[mdfu_cmd_packet->command] * SECONDS_PER_LSB;
     }
-    mdfu_cmd_packet->sequence_number = mdfu_cmd_packet->sync ? 0 : sequence_number;
+    if(mdfu_cmd_packet->sync){
+        sequence_number = 0;
+    }
+    mdfu_cmd_packet->sequence_number = sequence_number;
 
     mdfu_encode_cmd_packet(mdfu_cmd_packet, (uint8_t *) &packet_buffer.buffer, &packet_buffer.size);
 
@@ -372,13 +387,13 @@ static void log_error_cause(mdfu_packet_t *status_packet){
 
     if(PACKET_TRANSPORT_FAILURE == status_packet->status){
         if(MAX_TRANSPORT_ERROR_CAUSE >= status_packet->data[0]){
-            ERROR("Unknown transport failure cause %d", status_packet->data[0]);
+            ERROR("Invalid transport failure cause %d", status_packet->data[0]);
         }else{
             ERROR("Transport error cause: %s", MDFU_TRANSPORT_ERROR_CAUSE_STR[status_packet->data[0]]);
         }
     }else if(ABORT_FILE_TRANSFER == status_packet->status){
         if(MAX_FILE_TRANSFER_ABORT_CAUSE >= status_packet->data[0]){
-            ERROR("Unknown file abort cause %d", status_packet->data[0]);
+            ERROR("Invalid file abort cause %d", status_packet->data[0]);
         }else{
             ERROR("File transfer abort cause: %s", MDFU_FILE_TRANSFER_ABORT_CAUSE_STR[status_packet->data[0]]);
         }
@@ -472,6 +487,7 @@ int mdfu_decode_client_info(uint8_t *data, int length, client_info_t *client_inf
         }
         i += parameter_length;
     }
+    return 0;
 }
 
 /**
