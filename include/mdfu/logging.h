@@ -28,6 +28,12 @@ which the resemblance of logger() to a function would make C programmers want to
         fprintf(dbgstream,"%s:" format "\n", ERROR_LEVEL_NAMES[level], ## __VA_ARGS__); \
     } \
 } while (0)
+
+#define trace(level, format, ...) do {  \
+    if (level <= debug_level) { \
+        fprintf(dbgstream, format, ## __VA_ARGS__); \
+    } \
+} while (0)
 #endif
 
 #else
@@ -51,7 +57,7 @@ which the resemblance of logger() to a function would make C programmers want to
 #define WARN(format, ...) logger(WARNLEVEL, format, ## __VA_ARGS__)
 #define INFO(format, ...) logger(INFOLEVEL, format, ## __VA_ARGS__)
 #define DEBUG(format, ...) logger(DEBUGLEVEL, format, ## __VA_ARGS__)
-
+#define TRACE(level, format, ...) trace(level, format, ## __VA_ARGS__)
 #if 0
 #define LOG(level, format, ...) do { \
     if(level == LOG_ERR) {\
