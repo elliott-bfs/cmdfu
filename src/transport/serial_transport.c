@@ -2,7 +2,10 @@
 #include <stdbool.h>
 #include <stdio.h> // printf
 #include <errno.h>
+#include <assert.h>
 #include "mdfu/serial_transport.h"
+#include "mdfu/timeout.h"
+#include "mdfu/logging.h"
 
 #define FRAME_CHECK_SEQUENCE_SIZE 2
 #define FRAME_PAYLOAD_LENGTH_SIZE 2
@@ -48,71 +51,164 @@ static uint16_t calculate_frame_checksum(int size, uint8_t *data)
     return ~checksum;
 }
 
-int discard_until(uint8_t code)
+/**
+ * @brief Discards all incoming data until a specific code is encountered or a timeout occurs.
+ *
+ * This function reads data from a transport medium character by character until it finds the specified code.
+ * If the code is found, the function returns 0. If a read error occurs or a timeout expires before finding the code,
+ * the function returns -1 and sets the errno to ETIMEDOUT in case of a timeout.
+ *
+ * @param code The byte code to look for in the incoming data stream.
+ * @param timer A timeout_t structure that defines the timeout condition.
+ *
+ * @return int Returns 0 if the code is found, -1 if an error occurs or if a timeout expires.
+ *
+ */
+int discard_until(uint8_t code, timeout_t timer)
 {
-    bool pattern_detected = false;
-    int status;
+    int status = -1;
     uint8_t data;
-    uint8_t timeout = 5;
-    // TODO proper timeout implementation
-    //timer = Timer(self.timeout)
-    while(!pattern_detected)// && not timer.expired())
+
+    while(true)
     {
         status = transport_mac.read(1, &data);
+        assert(status <= 1);
         if(status < 0){
-            // TODO: error logging handling here
-            perror("Transport error with: ");
             break;
         }else if(status == 1) {
             if(data == code){
-                pattern_detected = true;
-            } else {
+                status = 0;
                 break;
-            }
+            } 
         }
-        //if timer.expired():
-        //    raise TimeoutError("Timeout while waiting for frame start pattern")
-    }
-    if(pattern_detected){
-        status = 0;
+        if(timeout_expired(timer)){
+            status = -1;
+            errno = ETIMEDOUT;
+            break;
+        }
     }
     return status;
 }
 
-int read_until(uint8_t code, int *size, uint8_t *data){
-    bool pattern_detected = false;
-    int status = 0;
+/**
+ * @brief Reads data from MAC layer until a specified code is encountered or a maximum size is reached.
+ *
+ * This function reads bytes one by one from a MAC layer into a buffer until either the specified end code is read,
+ * the buffer is filled to its maximum size, or a timeout occurs.
+ *
+ * @param code The byte code to read until.
+ * @param max_size The maximum number of bytes to read into the buffer.
+ * @param data A pointer to the buffer where the read bytes will be stored.
+ * @param timer A timeout structure that determines how long to wait for the end code before giving up.
+ *
+ * @return On success, the number of bytes read into the buffer (not including the end code).
+ *         On failure, -1 is returned and errno is set appropriately:
+ *         - ENOBUFS if the buffer is too small for the incoming data.
+ *         - ETIMEDOUT if the operation times out before the end code is encountered.
+ *         - Error codes from the MAC layer are passed through
+ */
+ssize_t read_until(uint8_t code, int max_size, uint8_t *data, timeout_t timer){
+    int status = -1;
     uint8_t tmp;
     uint8_t *pdata = data;
-    uint8_t timeout = 5;
-    // TODO proper timeout implementation
-    //timer = Timer(self.timeout)
-    while(!pattern_detected)// && not timer.expired())
+
+    while(true)
     {
+        if(max_size == pdata - data){
+            errno = ENOBUFS;
+            DEBUG("Buffer overflow in serial transport while waiting for frame end code");
+            break;
+        }
         status = transport_mac.read(1, &tmp);
+        assert(status <= 1);
 
         if(status < 0){
-            // TODO: error logging handling here
-            perror("Transport error with: ");
             break;
         }else if(status == 1) {
             if(tmp == code){
-                pattern_detected = true;
+                status = pdata - data;
+                break;
             } else {
                 *pdata = tmp;
                 pdata++;
             }
         }
-        //if timer.expired():
-        //    raise TimeoutError("Timeout while waiting for frame start pattern")
-    }
-    *size = pdata - data;
-    if(pattern_detected){
-        status = 0;
+        if(timeout_expired(timer)){
+            status = -1;
+            DEBUG("Timeout expired while waiting for frame end code");
+            errno = ETIMEDOUT;
+            break;
+        }
     }
     return status;
 }
 
+ssize_t read_and_decode_until(uint8_t code, int max_size, uint8_t *data, timeout_t timer){
+    int status = -1;
+    uint8_t tmp;
+    uint8_t *pdata = data;
+    bool escape_code = false;
+
+    while(true)
+    {
+        if(max_size == pdata - data){
+            errno = ENOBUFS;
+            DEBUG("Buffer overflow in serial transport while waiting for frame end code");
+            break;
+        }
+        status = transport_mac.read(1, &tmp);
+        assert(status <= 1);
+
+        if(status < 0){
+            break;
+        }else if(status == 1) {
+            if(tmp == FRAME_END_CODE){
+                status = pdata - data;
+                break;
+            } 
+            if(escape_code){
+                if(tmp == FRAME_START_ESC_SEQ){
+                    *pdata = FRAME_START_CODE;
+                } else if(tmp == FRAME_END_ESC_SEQ){
+                    *pdata = FRAME_END_CODE;
+                } else if(tmp == ESCAPE_SEQ_ESC_SEQ){
+                    *pdata = ESCAPE_SEQ_CODE;
+                pdata++;
+                } else {
+                    DEBUG("Invalid code (%x) after escape code", tmp);
+                    status = -1;
+                    errno = EINVAL;
+                    break;
+                }
+            } else {
+                if(code == ESCAPE_SEQ_CODE){
+                    escape_code = true;
+                } else {
+                    *pdata = tmp;
+                    pdata++;
+                }
+            }
+        }
+        if(timeout_expired(timer)){
+            status = -1;
+            DEBUG("Timeout expired while waiting for frame end code");
+            errno = ETIMEDOUT;
+            break;
+        }
+    }
+    return status;
+}
+
+/**
+ * @brief Initializes the transport layer.
+ *
+ * This function copies the MAC function pointers from the provided mac object
+ * into the global transport_mac structure and sets the transport timeout.
+ *
+ * @param mac Pointer to a mac_t structure that contains the MAC layer function pointers.
+ * @param timeout The timeout value to be used for transport layer operations.
+ * @return Always returns 0 to indicate success.
+ */
 static int init(mac_t *mac, int timeout){
     transport_mac.open = mac->open;
     transport_mac.close = mac->close;
@@ -178,7 +274,7 @@ static int decode_frame_payload(int data_size, uint8_t *data, int *decoded_data_
             } else if(code == ESCAPE_SEQ_ESC_SEQ){
                 decoded_data[size] = ESCAPE_SEQ_CODE;
             } else {
-                // TODO: Log error
+                DEBUG("Invalid code (%x) after escape code", code);
                 status = -1;
                 errno = EINVAL;
                 break;
@@ -199,51 +295,46 @@ static int decode_frame_payload(int data_size, uint8_t *data, int *decoded_data_
 
 static void log_frame(int size, uint8_t *data){
     int i = 0;
-    printf("size=%d payload=0x", size);
+    if(DEBUGLEVEL > debug_level){
+        return;
+    }
+    TRACE(DEBUGLEVEL, "size=%d payload=0x", size);
     
     for(; i < size - 2; i++){
-        printf("%02x", data[i]);
+        TRACE(DEBUGLEVEL, "%02x", data[i]);
     }
-    printf(" fcs=0x%04x\n", *((uint16_t *) &data[size - 2]));
-}
-
-static void print_hex_string(int size, uint8_t *buffer){
-    for(int i = 0; i < size; i++){
-        printf("%02x", buffer[i]);
-    }
+    TRACE(DEBUGLEVEL, " fcs=0x%04x\n", *((uint16_t *) &data[size - 2]));
 }
 
 static int read(int *size, uint8_t *data, float timeout){
     int status;
     uint16_t checksum;
     int decoded_size;
+    timeout_t timer;
+    set_timeout(&timer, timeout);
 
-    status = discard_until(FRAME_START_CODE);
+    status = discard_until(FRAME_START_CODE, timer);
     if(status < 0){
-        // TODO log error
         return status;
     }
-    status = read_until(FRAME_END_CODE, size, buffer);
+    status = read_until(FRAME_END_CODE, sizeof(buffer), buffer, timer);
     if(status < 0){
-        perror("Frame reception failed with: ");
         return status;
     }
-    
+    *size = status;
     // decoding into the same buffer
     status = decode_frame_payload(*size, buffer, &decoded_size, data);
     if(status < 0){
-        // log error
         return status;
     }
     *size = decoded_size;
     uint16_t frame_checksum = *((uint16_t *) &data[*size - 2]);
-    printf("Got a frame: ");
+    DEBUG("Got a frame: ");
     log_frame(*size, data);
 
     checksum = calculate_frame_checksum(*size - 2, data);
     if(checksum != frame_checksum){
-        // TODO logging
-        printf("Serial Transport: Frame check sequence verification failed, calculated 0x%04x but got 0x%04x\n", checksum, frame_checksum);
+        DEBUG("Serial Transport: Frame check sequence verification failed, calculated 0x%04x but got 0x%04x\n", checksum, frame_checksum);
         return -1;
     }
     *size -= 2; // remove checksum size to get payload size
@@ -265,7 +356,7 @@ static int write(int size, uint8_t *data){
 
     buffer[buf_index] = FRAME_END_CODE;
     buf_index += 1;
-    printf("Sending frame: ");
+    DEBUG("Sending frame: ");
     log_frame(buf_index - 2, &buffer[1]);
     return transport_mac.write(buf_index, buffer);
 }
