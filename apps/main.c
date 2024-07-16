@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <errno.h>
 #include <getopt.h>
 #include "version.h"
 #include "mdfu/socket_mac.h"
@@ -11,10 +12,6 @@
 #include "mdfu/tools.h"
 #include "mdfu/mdfu.h"
 
-uint8_t get_transfer_parameters_frame[] = {0x56, 0x80, 0x01, 0x7f, 0xfe, 0x9e};
-#define GET_TRANSFER_PARAMETERS_RETURN_FRAME_SIZE (4 + 2 + 5 + 2)
-uint8_t get_transfer_parameters_mdfu_packet[] = {0x80, 0x01};
-
 typedef enum {
     ACTION_UPDATE = 0,
     ACTION_CLIENT_INFO = 1,
@@ -22,7 +19,6 @@ typedef enum {
     ACTION_NONE = 3
 }action_t;
 
-const char *tools[] = {"serial", "mcp2221a", "network", NULL};
 const char *actions[] = {"update", "client-info", "tools-help", NULL};
 
 struct args {
@@ -40,8 +36,7 @@ struct args args = {
     .action = ACTION_NONE,
     .image = NULL
 };
-//char **tool_argv = NULL;
-//int tool_argc = 0;
+
 const char *help_usage = "pymdfu [-h | --help] [-v <level> | --verbose <level>] [-V | --version] [-R | --release-info] [<action>]";
 const char *help_update = "pymdfu [--help | -h] [--verbose <level> | -v <level>] [--config-file <file> | -c <file>] "
     "update --tool <tool> --image <image> [<tools-args>...]";
@@ -73,171 +68,108 @@ Usage examples\n\
     Update firmware through serial port and with update_image.img\n\
     pymdfu update --tool serial --image update_image.img --port COM11 --baudrate 115200\n";
 
-struct socket_config conf = {
-    .host = "192.168.1.20",//"10.146.84.54",
-    .port = 5559
-};
-void test_mac(void){
-    mac_t *mac;
 
-    get_socket_mac(&mac);
-    mac->init((void *) &conf);
-    mac->open();
 
-    mac->write(sizeof(get_transfer_parameters_frame), get_transfer_parameters_frame);
-    uint8_t buffer[1024];
-    mac->read(GET_TRANSFER_PARAMETERS_RETURN_FRAME_SIZE, buffer);
-    
-    for(int i=0; i < GET_TRANSFER_PARAMETERS_RETURN_FRAME_SIZE; i++)
-    {
-        printf("%02x", buffer[i]);
-    }
-    printf("\n");
-    fflush(NULL);
-    mac->close();
-}
-
-static void test_transport(void){
-    mac_t *mac;
-    puts("Initializing stack");
-    get_socket_mac(&mac);
-    if(mac->init((void *) &conf) < 0) {
-        puts("Socket MAC init failed");
-        return;
-    }
-    transport_t *transport;
-    get_serial_transport(&transport);
-    transport->init(mac, 2);
-
-    if(transport->open() < 0){
-        return;
-    }
-    transport->write(sizeof(get_transfer_parameters_mdfu_packet), get_transfer_parameters_mdfu_packet);
-    int size = 0;
-    uint8_t buffer[1024];
-    int status = transport->read(&size, buffer, 1);
-    if(status < 0){
-        printf("Transport error\n");
-        transport->close();
-        return;
-    }
-    transport->close();
-}
-#if 0
-int mdfu_update(transport_t *transport){
-    if(transport->open() < 0){
-        return -1;
-    }
-    transport->write(sizeof(get_transfer_parameters_mdfu_packet), get_transfer_parameters_mdfu_packet);
-    int size = 0;
-    uint8_t buffer[1024];
-    int status = transport->read(&size, buffer);
-    if(status < 0){
-        printf("Transport error\n");
-        transport->close();
-        return -1;
-    }
-    transport->close();
-}
-
-static int mdfu_client_info(void){
-    mac_t *mac;
-    transport_t *transport;
-
-    get_socket_mac(&mac);
-    if(mac->init((void *) &conf) < 0) {
-        DEBUG("Socket MAC init failed");
-        return -1;
-    }
-    get_serial_transport(&transport);
-    transport->init(mac, 2);
-
-    mdfu_init(transport, 2);
-    mdfu_open();
-    client_info_t client_info;
-    mdfu_get_client_info(&client_info);
-    print_client_info(&client_info);
-    mdfu_close();
-}
-#endif
 static int mdfu_client_info(int argc, char **argv){
     tool_t *tool;
     void *tool_conf = NULL;
     client_info_t client_info;
 
     if(get_tool_by_type(args.tool, &tool) < 0){
-        ERROR("Could not get tool");
-        return -1;
+        ERROR("Invalid tool selected");
+        goto err_exit;
     }
-    
     if(tool->parse_arguments(argc, argv, &tool_conf) < 0){
-        ERROR("Tools argument parsing failed");
-        return -1;
+        ERROR("Invalid tool argument");
+        goto err_exit;
     }
     if(tool->init(tool_conf) < 0){
-        ERROR("Initialization of tool failed");
-        return -1;
+        ERROR("Tool initialization failed");
+        goto err_exit;
     }
-
+    // TODO add configurable number of retries
     if(mdfu_init(&tool->ops, 2) < 0){
-        return -1;
+        ERROR("MDFU protocol initialization failed");
+        goto err_exit;
     }
 
     if(mdfu_open() < 0){
-        return -1;
+        ERROR("Connecting to tool failed");
+        goto err_exit;
     }
 
     if(mdfu_get_client_info(&client_info) < 0){
-        return -1;
+        ERROR("Failed to get client info");
+        goto err_exit;
     }
     print_client_info(&client_info);
     mdfu_close();
+    free(tool_conf);
     return 0;
+
+    err_exit:
+        mdfu_close();
+        if(NULL != tool_conf){
+            free(tool_conf);
+        }
+        return -1;
 }
 
 static int mdfu_update(int argc, char **argv){
     tool_t *tool;
     void *tool_conf = NULL;
     FILE *image = NULL;
-    printf("%s",args.image);
-    image = fopen(args.image, "rb");
-    if(image == NULL){
-        perror("Could not open file:");
-        return -1;
+
+    if(fwimg_file_reader.open(args.image) < 0){
+        ERROR("Error opening image file: %s", strerror(errno));
+        goto err_exit;
     }
     if(get_tool_by_type(args.tool, &tool) < 0){
-        perror("Could not get tool");
-        return -1;
+        ERROR("Invalid tool selected");
+        goto err_exit;
     }
-    
     if(tool->parse_arguments(argc, argv, &tool_conf) < 0){
-        perror("Tools argument parsing failed");
-        return -1;
+        ERROR("Invalid tool argument");
+        goto err_exit;
     }
     if(tool->init(tool_conf) < 0){
-        perror("Initialization of tool failed");
-        return -1;
+        ERROR("Tool initialization failed");
+        goto err_exit;
     }
+    // TODO add configurable number of retries
     if(mdfu_init(&tool->ops, 2) < 0){
-        return -1;
+        ERROR("MDFU protocol initialization failed");
+        goto err_exit;
     }
 
     if(mdfu_open() < 0){
-        return -1;
+        ERROR("Connecting to tool failed");
+        goto err_exit;
     }
 
-    if(mdfu_run_update(image) < 0){
-        return -1;
+    if(mdfu_run_update(&fwimg_file_reader) < 0){
+        ERROR("Firmware update failed");
+        goto err_exit;
     }
-    fclose(image);
+    mdfu_close();
+    fwimg_file_reader.close();
+    printf("Firmware update completed successfully\n");
     return 0;
+
+    err_exit:
+        fwimg_file_reader.close();
+        mdfu_close();
+        if(NULL != tool_conf){
+            free(tool_conf);
+        }
+        return -1;
 }
 
 void tools_help(void){
     tool_t *tool;
     char *cli_help_text;
 
-    for(const char **tool_name = tools; *tool_name != NULL; tool_name++){
+    for(const char **tool_name = tool_names; *tool_name != NULL; tool_name++){
         if(0 == get_tool_by_name((char *) *tool_name, &tool)){
             if(tool->get_parameter_help != NULL){
                 cli_help_text = tool->get_parameter_help();
@@ -312,7 +244,7 @@ int parse_mdfu_update_arguments(int argc, char **argv, int *new_argc, char **new
             break;
 
         case '?':
-            printf("Not recognized argument %s, dumping it in argv\n", argv[optind -1]);
+            //printf("Not recognized argument %s, dumping it in argv\n", argv[optind -1]);
             new_argv[*new_argc] = argv[optind -1]; 
             *new_argc += 1;
             // check if next item is an option or an option value
@@ -391,7 +323,7 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
         case 'v':
             int lvl = parse_debug_level(optarg);
             if(-1 == lvl){
-                ERROR("Error: invalid verbosity level - %s\n", optarg);
+                ERROR("Invalid verbosity level - %s\n", optarg);
                 error_exit = true;
             } else{
                 set_debug_level(lvl);
@@ -409,16 +341,16 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
             break;
         case 't':
             // Check if --tool argument is valid
-            for(const char **p = tools; *p != NULL; p++){
+            for(const char **p = tool_names; *p != NULL; p++){
                 if(strcmp(optarg, *p) == 0){
-                    args.tool = p - tools;
+                    args.tool = p - tool_names;
                 }
             }
             // If tool argument is invalid print error message
             if(args.tool == TOOL_NONE){
                 printf("Unkown tool \"%s\" for --tool option argument\n", optarg);
                 printf("Valid tools are: ");
-                for(const char **p = tools; *p != NULL; p++){
+                for(const char **p = tool_names; *p != NULL; p++){
                     printf("%s ", *p);
                 }
                 printf("\n");
@@ -561,4 +493,3 @@ int main(int argc, char **argv)
     }
     exit(0);
 }
-
