@@ -1,3 +1,76 @@
+## VSCode C configuration
+
+This project uses some defines that were introduced with the C11 standard and some that take advantage of the glibc library. For the intellisense in VSCode it is necessary to specify these requirements in the `cStandard` setting.
+```json
+            "cStandard": "gnu11",
+```
+
+## Linux kernel header files for WSL
+
+On WSL some user space headers are not installed e.g. headers required for the I2C subsystem interface. In a usual Linux environment the headers can be installed through the distribution packaging system but for the WSL kernel there is no such package. A manual way to get the headers created is to first clone the WSL kernel repository https://github.com/microsoft/WSL2-Linux-Kernel.
+`git clone --depth 1 https://github.com/microsoft/WSL2-Linux-Kernel.git`
+No full history is needed here so to save some space and time downloading we reduce history with `--depth 1`.
+Make sure that the branch matches the WSL kernel version.
+
+```bash
+$ git branch -l
+* linux-msft-wsl-5.15.y
+$ uname -r
+5.15.146.1-microsoft-standard-WSL2
+```
+
+The next step is to configure the kernel to export the headers and for this some tools are required (Complete list of tools required for building the kernel https://www.kernel.org/doc/html/latest/process/changes.html). Most of these tools are probably already installed in WSL so a trial and error could identify the rest. For configuring the kernel with `menuconfig` on Ubuntu the following packages had to be installed.
+
+```bash
+$ apt-get install bison flex libncurses-dev
+```
+
+With the requird packages installed run
+```bash
+$ make KCONFIG_CONFIG=Microsoft/config-wsl menuconfig
+```
+to start the configuration based on the config file from Microsoft. I the configuration menu the config name `CONFIG_HEADERS_INSTALL` nees to be set and this is located under
+```
+Linux Kernel Configuration
+└─>Kernel hacking
+    └─>Compile-time checks and compiler options
+        └─>Install uapi headers to usr/include
+```
+
+With the kernel configured the headers can now be generated.
+```bash
+$ make headers_install INSTALL_HDR_PATH=<my-linux-header-include-path>
+```
+
+The `INSTALL_HDR_DIR_PATH` defines where the headers should be installed and if not provided it will try to install it in the system path, on my Ubuntu WSL this was `/usr/include/`. If installed in the system then VS Code will pick it up automatically in a C/C++ project. Otherwise the path has to be added in the C/C++ properties json file.
+
+After saving your configuration, it's a good idea to reload the VS Code window to ensure the new settings are applied. You can do this by opening the Command Palette (`Ctrl+Shift+P`) and typing "Reload Window".
+```json
+{
+    "configurations": [
+        {
+            "name": "Linux-WSL",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/new/location/of/wsl/kernel/headers/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
+```
+
+## Raspberry Pi setup
+
+```bash
+$ apt install raspberrypi-kernel raspberrypi-kernel-headers
+```
+
 ## Test
 
 ### Ceedling Installation local
