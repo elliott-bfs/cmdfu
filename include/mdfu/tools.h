@@ -18,6 +18,9 @@ typedef enum tool_type {
     TOOL_NONE = 3
 }tool_type_t;
 
+extern const char *tool_names[];
+
 int get_tool_by_name(char *name, tool_t **tool);
 int get_tool_by_type(tool_type_t tool_type, tool_t **tool);
+int get_tool_name_by_type(tool_type_t tool, const char **name);
 #endif
