@@ -1,8 +1,22 @@
+## Building
+
+## CMAKE
+
+When linking libraries the sequence can be important for CMAKE. For example this application link configuration `target_link_libraries(mdfu mdfulib toolslib transportlib maclib utilslib)`, where `maclib` might depend on `utilslib`, it is necessary that `utilslib` is listed after `maclib`.
+
+
 ## VSCode C configuration
 
 This project uses some defines that were introduced with the C11 standard and some that take advantage of the glibc library. For the intellisense in VSCode it is necessary to specify these requirements in the `cStandard` setting.
 ```json
             "cStandard": "gnu11",
+```
+## Include paths for header files
+
+CMAKE generates a file called `compile_commands.json` in the build directory that includes the individual commands to build each object in the project. If this file is located in the project root (default build directory) VS Code would pick it up automatically but in a better project setup a specific build directory might be used, and then VS Code C/C++ extension must be told where to find this file. This can be done in the `c_cpp_properties.json`.
+
+```json
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
 ```
 
 ## Linux kernel header files for WSL
@@ -29,7 +43,7 @@ With the requird packages installed run
 ```bash
 $ make KCONFIG_CONFIG=Microsoft/config-wsl menuconfig
 ```
-to start the configuration based on the config file from Microsoft. I the configuration menu the config name `CONFIG_HEADERS_INSTALL` nees to be set and this is located under
+to start the configuration based on the config file from Microsoft. In the configuration menu the config name `CONFIG_HEADERS_INSTALL` nees to be set and this is located under
 ```
 Linux Kernel Configuration
 └─>Kernel hacking
