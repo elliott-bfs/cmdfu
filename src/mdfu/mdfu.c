@@ -55,10 +55,11 @@ static const char *MDFU_COMMANDS_STR[] = {
 static const char *MDFU_STATUS_STR[] = {
     "", // Status code 0 does not exist
     "Success",
-    "Command Not Supported",
-    "Command Not Authorized",
-    "Transfer Failure",
-    "Abort File Transfer"
+    "Command not supported",
+    "", // Reserved for future use
+    "Command not executed",
+    "Transfer failure",
+    "Abort file transfer"
 };
 
 /**
@@ -77,9 +78,12 @@ const char *MDFU_FILE_TRANSFER_ABORT_CAUSE_STR[] = {
     "in the update file"
 };
 
-static const char *MDFU_TRANSPORT_ERROR_CAUSE_STR[] = {
-    "Invalid checksum detected",
-    "Packet was too large"
+static const char *MDFU_CMD_NOT_EXECUTED_CAUSE_STR[] = {
+    "Command received failed the Transport Integrity Check "\
+    "indicating that the command was corrupted during transportation from the host to the client",
+    "Received command exceeded the size of the client buffer",
+    "Received command was too short",
+    "Sequence number of the received command is invalid"
 };
 
 static transport_t *mdfu_transport;
@@ -112,7 +116,8 @@ static inline void increment_sequence_number(){
  * @param type MDFU packet type, either MDFU_CMD or MDFU_STATUS.
  */
 void mdfu_log_packet(mdfu_packet_t *packet, mdfu_packet_type_t type){
-    char buf[128 + MDFU_DATA_MAX_SIZE * 2];
+    // Best estimate 128 chars for printed text, x2 for data since we print them as hex characters
+    char buf[128 + MDFU_MAX_COMMAND_DATA_LENGTH * 2];
     int cnt = 0;
     if(type == MDFU_CMD){
         cnt = sprintf((char *) &buf, "Sequence number: %d; Command: %s; Sync: %s; Data size: %d",
@@ -385,15 +390,15 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
 static void log_error_cause(mdfu_packet_t *status_packet){
     ERROR("Received MDFU status packet with %s", MDFU_STATUS_STR[status_packet->status]);
 
-    if(PACKET_TRANSPORT_FAILURE == status_packet->status){
-        if(MAX_TRANSPORT_ERROR_CAUSE >= status_packet->data[0]){
-            ERROR("Invalid transport failure cause %d", status_packet->data[0]);
+    if(COMMAND_NOT_EXECUTED == status_packet->status){
+        if(MAX_CMD_NOT_EXECUTED_ERROR_CAUSE >= status_packet->data[0]){
+            ERROR("Invalid command not executed cause %d", status_packet->data[0]);
         }else{
-            ERROR("Transport error cause: %s", MDFU_TRANSPORT_ERROR_CAUSE_STR[status_packet->data[0]]);
+            ERROR("Command not executed cause: %s", MDFU_CMD_NOT_EXECUTED_CAUSE_STR[status_packet->data[0]]);
         }
     }else if(ABORT_FILE_TRANSFER == status_packet->status){
         if(MAX_FILE_TRANSFER_ABORT_CAUSE >= status_packet->data[0]){
-            ERROR("Invalid file abort cause %d", status_packet->data[0]);
+            ERROR("Invalid file transfer abort cause %d", status_packet->data[0]);
         }else{
             ERROR("File transfer abort cause: %s", MDFU_FILE_TRANSFER_ABORT_CAUSE_STR[status_packet->data[0]]);
         }

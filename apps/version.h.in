@@ -1,8 +1,0 @@
-#ifndef VERSION_H
-#define VERSION_H
-
-#define MDFU_VERSION_MAJOR @mdfu_VERSION_MAJOR@
-#define MDFU_VERSION_MINOR @mdfu_VERSION_MINOR@
-#define MDFU_VERSION_PATCH @mdfu_VERSION_PATCH@
-
-#endif

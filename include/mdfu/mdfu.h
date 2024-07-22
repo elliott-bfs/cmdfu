@@ -5,11 +5,11 @@
 #include <stdbool.h>
 #include "mdfu/transport.h"
 #include "mdfu/image_reader.h"
+#include "mdfu_config.h"
 
 #define MDFU_COMMAND_SIZE 1
 #define MDFU_SEQUENCE_FIELD_SIZE 1
-#define MDFU_DATA_MAX_SIZE 1024
-#define MDFU_PACKET_BUFFER_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_COMMAND_SIZE + MDFU_DATA_MAX_SIZE)
+#define MDFU_PACKET_BUFFER_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_COMMAND_SIZE + MDFU_MAX_COMMAND_DATA_LENGTH)
 
 #define MDFU_HEADER_SYNC 0x80
 #define MDFU_HEADER_RESEND 0x40
@@ -28,9 +28,9 @@ typedef enum
 typedef enum
 {
     SUCCESS = 0x01U,
-    NOT_SUPPORTED = 0x02U,
+    COMMAND_NOT_SUPPORTED = 0x02U,
     NOT_AUTHORIZED = 0x03U,
-    PACKET_TRANSPORT_FAILURE = 0x04U,
+    COMMAND_NOT_EXECUTED = 0x04U,
     ABORT_FILE_TRANSFER = 0x05U,
     MAX_MDFU_STATUS = 0x06U // Indicates max enum value
 } mdfu_status_t;
@@ -48,10 +48,12 @@ typedef enum{
 }mdfu_file_transfer_abort_cause_t;
 
 typedef enum {
-    INVALID_CHECKSUM = 0,
-    PACKET_TOO_LARGE = 1,
-    MAX_TRANSPORT_ERROR_CAUSE = 2
-}transport_error_cause_t;
+    TRANSPORT_INTEGRITY_CHECK_ERROR = 0,
+    COMMAND_TOO_LONG = 1,
+    COMMAND_TOO_SHORT = 2,
+    SEQUENCE_NUMBER_INVALID = 3,
+    MAX_CMD_NOT_EXECUTED_ERROR_CAUSE = 4
+}cmd_not_executed_cause_t;
 
 typedef struct
 {

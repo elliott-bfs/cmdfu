@@ -34,9 +34,9 @@
     - +:test/**
     - -:test/support
   :source:
-    - +:../include/
+    - +:../include/**
     - +:../src/**
-    - -:../build/
+    - +:../build/apps/cmdfu # TODO: Includes generated header files. Maybe we should reduce the scope here by placing generated files into a separate folder
   :support:
     - test/support
   :libraries: []

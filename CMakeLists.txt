@@ -1,28 +1,41 @@
 cmake_minimum_required(VERSION 3.0.0)
 # The version here will add the variables
 # mdfu_VERSION_MAJOR, mdfu_VERSION_MINOR and mdfu_VERSION_PATCH
-project(mdfu VERSION 0.2.0 LANGUAGES C)
+project(MDFU_Tools)
 
 include(CTest)
 enable_testing()
 
+#[[
+# This section contains options to define a location for the Linux kernel
+# headers if they are not located in the "default" place where the compiler
+# toolchain would find them.
+
+# Find the kernel release version
+execute_process(
+  COMMAND uname -r
+  OUTPUT_VARIABLE KERNEL_RELEASE
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# Set the path to the kernel header files based on "uname -r" command
+set(KERNEL_HEADERS_DIR "/usr/src/linux-headers-${KERNEL_RELEASE}")
+
+# Optionally set path manually (not portable)
+# set(KERNEL_HEADERS_DIR "/usr/include/linux)
+
+# Verify that the kernel headers directory exists
+if(NOT EXISTS "${KERNEL_HEADERS_DIR}")
+  message(FATAL_ERROR "Kernel headers not found in ${KERNEL_HEADERS_DIR}")
+endif()
+
+# Include the kernel header files
+include_directories("${KERNEL_HEADERS_DIR}/include")
+]]
+
+# C23 -> 23, C17 -> 17, C99 -> 99
+set_property(GLOBAL PROPERTY C_STANDARD 23)
+set_property(GLOBAL PROPERTY C_EXTENSIONS True)
+
 add_subdirectory(apps)
-#mdfu.c serial_transport.c
-#add_executable(mdfu main.c socket_mac.c serial_transport.c transport.c)
-# we need to add the build directory because some source files will
-# only be available there after configuration
-#target_include_directories(mdfu PUBLIC
-#                           "${PROJECT_BINARY_DIR}"
-#                           )
-# C23 -> 23, C17 -> 17, C99 -> 99  
-set_property(TARGET mdfu PROPERTY C_STANDARD 23)
-set_property(TARGET mdfu PROPERTY C_EXTENSIONS True)
-
-# Configure version.h.in and create version.h in the build directory
-#configure_file(version.h.in version.h)
-
-set(CPACK_PROJECT_NAME ${PROJECT_NAME})
-set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
-include(CPack)
-
-add_subdirectory(src)
+#add_subdirectory(src)
