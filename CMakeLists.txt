@@ -38,4 +38,4 @@ set_property(GLOBAL PROPERTY C_STANDARD 23)
 set_property(GLOBAL PROPERTY C_EXTENSIONS True)
 
 add_subdirectory(apps)
-#add_subdirectory(src)
+add_subdirectory(src)

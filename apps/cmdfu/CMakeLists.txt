@@ -11,7 +11,7 @@ configure_file(${CMAKE_SOURCE_DIR}/apps/cmdfu/mdfu_config.h.in ${CMAKE_CURRENT_B
 target_include_directories(cmdfu PUBLIC "${PROJECT_DIR}/include")
 # Need to add the build directory where we have placed the version.h
 target_include_directories(cmdfu PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-add_subdirectory("../../src" "../cmdfu-lib")# "${CMAKE_CURRENT_BINARY_DIR}/lib")
+#add_subdirectory("../../src" "../cmdfu-lib")# "${CMAKE_CURRENT_BINARY_DIR}/lib")
 target_link_libraries(cmdfu PRIVATE mdfulib toolslib transportlib maclib utilslib)
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
