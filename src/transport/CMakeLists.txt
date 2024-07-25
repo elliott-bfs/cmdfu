@@ -6,4 +6,4 @@ set(HEADER_LIST
 add_library(transportlib transport.c serial_transport.c ${HEADER_LIST})
 target_include_directories(transportlib PUBLIC "${CMAKE_SOURCE_DIR}/include")
 
-target_include_directories(transportlib PRIVATE ${${CMAKE_CURRENT_BINARY_DIR}})
+target_include_directories(transportlib PRIVATE "${CMAKE_BINARY_DIR}/include")
