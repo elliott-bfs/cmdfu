@@ -4,7 +4,7 @@ pipeline {
     agent {
         kubernetes {
             defaultContainer 'buildpack-deps'
-            yamlFile 'citd/cloudprovider.yml'
+            yamlFile 'citd/cloudprovider.yaml'
         }
     }
 
