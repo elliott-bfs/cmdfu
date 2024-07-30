@@ -33,7 +33,7 @@ pipeline {
                         execute("mkdir -m 777 ${BUILD_FOLDER}")
                         // Build should not stop execution when ceedling returns error code. Ceedling will return error code if any tests fail,
                         // but this will normally terminate execution and test report will just be ignored
-                        execute("ceedling test:all || true")
+                        execute("cd test;ceedling test:all || true")
                     }
                     junit env.TEST_REPORT_PATH
                     archiveArtifacts artifacts: env.TEST_REPORT_PATH
