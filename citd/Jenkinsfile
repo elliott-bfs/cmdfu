@@ -24,6 +24,17 @@ pipeline {
     }
 
     stages {
+        stage('Install Dependencies') {
+            steps {
+                script {
+                    // Update package list and install CMake
+                    sh '''
+                        apt-get update
+                        apt-get install -y cmake
+                    '''
+                }
+            }
+        }
         stage('Build') {
             steps {
                 execute("cmake -S ./ -B ./build")
