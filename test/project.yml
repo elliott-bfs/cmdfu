@@ -36,7 +36,7 @@
   :source:
     - +:../include/**
     - +:../src/**
-    - +:../build/apps/cmdfu # TODO: Includes generated header files. Maybe we should reduce the scope here by placing generated files into a separate folder
+    - +:../build/include # TODO: Generated header files (e.g. mdfu_conf.h)
   :support:
     - test/support
   :libraries: []
