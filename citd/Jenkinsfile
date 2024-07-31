@@ -24,6 +24,12 @@ pipeline {
     }
 
     stages {
+        stage('Build') {
+            steps {
+                execute("cmake -S ./ -B ./build")
+                execute("cd ./build;make")
+            }
+        }
         stage('Test') {
             steps {
                 container ('ceedling') {
