@@ -12,7 +12,7 @@ pipeline {
         ARTIFACTORY_SERVER = 'https://artifacts.microchip.com:7999/artifactory'
         ARTIFACTORY_MODULE = 'cmdfu'
         BUILD_FOLDER = 'build'
-        TEST_REPORT_PATH = 'build/artifacts/test/*.xml'
+        TEST_REPORT_PATH = 'test/build/artifacts/test/*.xml'
         // When using branch name as part of IVY revision there should not be any forward slashes or dots in the branch name as it will confuse the ivy version parser
         MODIFIED_BRANCH_NAME = "${BRANCH_NAME}".replace(".", "_").replace("/", "_")
         IVY_REVISION = "${MODIFIED_BRANCH_NAME}.${BUILD_NUMBER}"
@@ -49,6 +49,7 @@ pipeline {
                         // but this will normally terminate execution and test report will just be ignored
                         execute("cd test;ceedling test:all || true")
                     }
+                    // store ceedling test report that was generated in junit format
                     junit env.TEST_REPORT_PATH
                     archiveArtifacts artifacts: env.TEST_REPORT_PATH
                 }

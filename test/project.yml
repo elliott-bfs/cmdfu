@@ -103,7 +103,11 @@
     - "#{Ceedling.load_path}"
   :enabled:
     - stdout_pretty_tests_report
+    - junit_tests_report
     - module_generator
+
+:junit_tests_report:
+  :artifact_filename: test_report.xml
 
 :module_generator:
   :project_root: ./
