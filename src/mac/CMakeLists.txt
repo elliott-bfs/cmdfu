@@ -1,8 +1,10 @@
 set(HEADER_LIST
-    "${CMAKE_SOURCE_DIR}/include/mdfu/mac.h"
-    "${CMAKE_SOURCE_DIR}/include/mdfu/socket_mac.h"
-    "${CMAKE_SOURCE_DIR}/include/mdfu/serial_mac.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/mac/mac.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/mac/socket_mac.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/mac/serial_mac.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/mac/spidev_mac.h"
 )
 
-add_library(maclib socket_mac.c serial_mac.c i2c_mac.c ${HEADER_LIST})
+add_library(maclib socket_mac.c socket_packet_mac.c serial_mac.c i2c_mac.c spidev_mac.c ${HEADER_LIST})
 target_include_directories(maclib PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_include_directories(maclib PUBLIC "${PROJECT_BINARY_DIR}/include")

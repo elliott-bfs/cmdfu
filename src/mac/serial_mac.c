@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include "mdfu/serial_mac.h"
+#include "mdfu/mac/serial_mac.h"
 #include "mdfu/logging.h"
 
 #define PORT_NAME_MAX_SIZE 256

@@ -5,11 +5,11 @@
 #include <errno.h>
 #include <getopt.h>
 #include "version.h"
-#include "mdfu/socket_mac.h"
-#include "mdfu/serial_transport.h"
-#include "mdfu/transport.h"
+//#include "mdfu/mac/socket_mac.h"
+//#include "mdfu/serial_transport.h"
+//#include "mdfu/transport.h"
 #include "mdfu/logging.h"
-#include "mdfu/tools.h"
+#include "mdfu/tools/tools.h"
 #include "mdfu/mdfu.h"
 
 typedef enum {

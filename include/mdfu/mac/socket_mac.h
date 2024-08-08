@@ -9,5 +9,6 @@ struct socket_config {
 };
 
 void get_socket_mac(mac_t **mac);
+void get_socket_packet_mac(mac_t **mac);
 
 #endif

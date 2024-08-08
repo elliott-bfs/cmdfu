@@ -1,7 +1,7 @@
 #ifndef TOOLS_H
 #define TOOLS_H
 
-#include "mdfu/transport.h"
+#include "mdfu/transport/transport.h"
 
 typedef struct {
     transport_t ops;

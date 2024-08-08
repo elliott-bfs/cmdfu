@@ -1,6 +1,6 @@
 #include <string.h>
 #include <errno.h>
-#include "mdfu/tools.h"
+#include "mdfu/tools/tools.h"
 #include "mdfu/tools/network.h"
 #include "mdfu/logging.h"
 

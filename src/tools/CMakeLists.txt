@@ -1,5 +1,5 @@
 set(HEADER_LIST
-    "${CMAKE_SOURCE_DIR}/include/mdfu/tools.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/tools/tools.h"
     "${CMAKE_SOURCE_DIR}/include/mdfu/tools/network.h"
     "${CMAKE_SOURCE_DIR}/include/mdfu/tools/serial.h"
 )

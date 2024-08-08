@@ -3,10 +3,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include "mdfu/tools.h"
-#include "mdfu/transport.h"
+#include "mdfu/tools/tools.h"
+#include "mdfu/transport/transport.h"
 #include "mdfu/logging.h"
-#include "mdfu/serial_mac.h"
+#include "mdfu/mac/serial_mac.h"
 
 #define TOOL_PARAMETERS_HELP "\
 Serial Tool Options:\n\
