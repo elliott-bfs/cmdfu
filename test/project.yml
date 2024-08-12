@@ -36,7 +36,7 @@
   :source:
     - +:../include/**
     - +:../src/**
-    - +:../build/include # TODO: Generated header files (e.g. mdfu_conf.h)
+    - +:../build/include
   :support:
     - test/support
   :libraries: []
