@@ -4,7 +4,7 @@
 #include "mdfu/tools/network.h"
 #include "mdfu/logging.h"
 
-const char *tool_names[] = {"serial", "mcp2221a", "network", NULL};
+const char *tool_names[] = {"serial", "mcp2221a", "network", "spidev", NULL};
 
 int get_tool_name_by_type(tool_type_t tool, const char **name){
     if(tool >= TOOL_NONE){
