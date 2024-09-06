@@ -5,9 +5,6 @@
 #include <errno.h>
 #include <getopt.h>
 #include "version.h"
-//#include "mdfu/mac/socket_mac.h"
-//#include "mdfu/serial_transport.h"
-//#include "mdfu/transport.h"
 #include "mdfu/logging.h"
 #include "mdfu/tools/tools.h"
 #include "mdfu/mdfu.h"
@@ -100,6 +97,7 @@ static int mdfu_client_info(int argc, char **argv){
 
     if(mdfu_get_client_info(&client_info) < 0){
         ERROR("Failed to get client info");
+        mdfu_close();
         goto err_exit;
     }
     print_client_info(&client_info);
@@ -108,7 +106,6 @@ static int mdfu_client_info(int argc, char **argv){
     return 0;
 
     err_exit:
-        mdfu_close();
         if(NULL != tool_conf){
             free(tool_conf);
         }
