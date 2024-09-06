@@ -64,7 +64,7 @@ int get_baudrate(int baud)
     }
 }
 
-int mac_init(void *conf)
+static int mac_init(void *conf)
 {
     struct serial_config *config = (struct serial_config *) conf;
     if(opened){
@@ -84,7 +84,7 @@ int mac_init(void *conf)
     return 0;
 }
 
-int mac_open(void)
+static int mac_open(void)
 {
     struct termios tty;
     DEBUG("Opening serial MAC");
@@ -96,7 +96,7 @@ int mac_open(void)
     serial_port = open(port, O_RDWR);
 
     if(serial_port < 0){
-        ERROR("open: %s", strerror(errno));
+        ERROR("open: %s %s", strerror(errno), port);
         return -1;
     }
 
@@ -145,7 +145,7 @@ int mac_open(void)
     return 0;
 }
 
-int mac_close(void)
+static int mac_close(void)
 {
     DEBUG("Closing serial MAC");
     if(opened){
@@ -158,7 +158,7 @@ int mac_close(void)
     }
 }
 
-int mac_read(int size, uint8_t *data)
+static int mac_read(int size, uint8_t *data)
 {
     int status;
     status = read(serial_port, data, size);
@@ -169,7 +169,7 @@ int mac_read(int size, uint8_t *data)
     return status;
 }
 
-int mac_write(int size, uint8_t *data)
+static int mac_write(int size, uint8_t *data)
 {
     ssize_t status;
     status = write(serial_port, data, size);

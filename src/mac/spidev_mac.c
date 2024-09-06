@@ -53,7 +53,7 @@ static spi_device_t device = {
  *       - `EBUSY`: The device is already opened.
  *       - `EINVAL`: The path name length exceeds the maximum allowed size.
  */
-int mac_init(void *conf)
+static int mac_init(void *conf)
 {
     struct spidev_config *config = (struct spidev_config *) conf;
     if(device.fd != -1){
@@ -75,7 +75,7 @@ int mac_init(void *conf)
     return 0;
 }
 
-int mac_open(void)
+static int mac_open(void)
 {
     DEBUG("Opening spidev MAC");
     if(device.fd != -1){
@@ -100,7 +100,7 @@ int mac_open(void)
     return 0;
 }
 
-int mac_close(void)
+static int mac_close(void)
 {
     DEBUG("Closing serial MAC");
     if(device.fd != -1){
@@ -114,7 +114,7 @@ int mac_close(void)
 }
 
 
-int spi_transfer(uint8_t *tx_buffer, uint8_t *rx_buffer, size_t length) {
+static int spi_transfer(uint8_t *tx_buffer, uint8_t *rx_buffer, size_t length) {
     if (device.fd < 0 || !tx_buffer || !rx_buffer || length == 0) return -1;
     assert(device.fd >= 0);
 
@@ -134,7 +134,7 @@ int spi_transfer(uint8_t *tx_buffer, uint8_t *rx_buffer, size_t length) {
     return 0;
 }
 
-int mac_read(int size, uint8_t *data)
+static int mac_read(int size, uint8_t *data)
 {
     int status;
     
@@ -149,7 +149,7 @@ int mac_read(int size, uint8_t *data)
     return 0;
 }
 
-int mac_write(int size, uint8_t *data)
+static int mac_write(int size, uint8_t *data)
 {
     if(spi_transfer(data, device.rx_buffer, size) < 0){
         ERROR("Serial MAC write: %s", strerror(errno));
