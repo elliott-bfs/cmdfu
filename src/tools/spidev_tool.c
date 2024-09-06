@@ -10,7 +10,7 @@
 
 #define TOOL_PARAMETERS_HELP "\
 Serial Tool Options:\n\
-    --clk-speed <clock speed>: e.g. 1M\n\
+    --clk-speed <clock speed>: e.g. 1000000\n\
     --dev <device> e.g. /dev/spidev0.0\n\
     --mode <mode> One of [0, 1, 2, 3]\n"
 
@@ -36,12 +36,12 @@ static int close(void){
 static int init(void *config){
     struct spidev_config *spidev_conf = (struct spidev_config *) config;
     int status = 0;
-    DEBUG("Initializing serial tool");
+    DEBUG("Initializing spidev tool");
     get_spidev_mac(&spidev_mac);
     if(0 == status){
-        status = spidev_mac->init((void *) &spidev_conf);
+        status = spidev_mac->init((void *) spidev_conf);
         if(status < 0){
-            ERROR("Serial MAC init failed");
+            ERROR("spidev MAC init failed");
         }
         if(0 == status){
             status = get_transport(SPI_TRANSPORT, &spidev_transport);
@@ -146,11 +146,11 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
         return -1;
     }
     if(0 == spidev_conf->speed){
-        ERROR("No SPI clock speed was provided using 1 MHz");
-        spidev_conf->speed = 1e6;
+        ERROR("The following arguments are required: --tool");
+        return -1;
     }
     if(NULL == spidev_conf->path){
-        ERROR("No serial port was provided");
+        ERROR("No spidev device was provided");
         return -1;
     }
     return 0;

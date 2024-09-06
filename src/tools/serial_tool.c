@@ -38,7 +38,7 @@ static int init(void *config){
     DEBUG("Initializing serial tool");
     get_serial_mac(&serial_mac);
     if(0 == status){
-        status = serial_mac->init((void *) &serial_conf);
+        status = serial_mac->init((void *) serial_conf);
         if(status < 0){
             ERROR("Serial MAC init failed");
         }

@@ -13,8 +13,8 @@ typedef struct {
 
 typedef enum tool_type {
     TOOL_SERIAL = 0,
-    TOOL_MCP2221A = 1,
-    TOOL_NETWORK = 2,
+    TOOL_NETWORK = 1,
+    TOOL_SPIDEV = 2,
     TOOL_NONE = 3
 }tool_type_t;
 
