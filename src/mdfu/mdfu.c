@@ -13,23 +13,71 @@
 #include "mdfu/mdfu.h"
 #include "mdfu/logging.h"
 #include "mdfu/image_reader.h"
+#include "mdfu_config.h"
 
-// Client info 
+/**
+ * @defgroup client_info Client Information
+ * @brief Constants related to MDFU client information.
+ * @{
+ */
+
+/**
+ * @def PARAM_TYPE_SIZE
+ * @brief Size of the client info parameter type in bytes.
+ */
 #define PARAM_TYPE_SIZE  1
+/**
+ * @def PARAM_LENGTH_SIZE
+ * @brief Size of the client info parameter length in bytes.
+ */
 #define PARAM_LENGTH_SIZE  1
+/**
+ * @def BUFFER_INFO_SIZE
+ * @brief Size of the client info buffer information in bytes.
+ */
 #define BUFFER_INFO_SIZE  3
+/**
+ * @def PROTOCOL_VERSION_SIZE
+ * @brief Size of the protocol version in bytes.
+ */
 #define PROTOCOL_VERSION_SIZE  3
+/**
+ * @def PROTOCOL_VERSION_INTERNAL_SIZE
+ * @brief Size of the internal protocol version in bytes.
+ */
 #define PROTOCOL_VERSION_INTERNAL_SIZE  4
+/**
+ * @def COMMAND_TIMEOUT_SIZE
+ * @brief Size of a command timeout in bytes.
+ */
 #define COMMAND_TIMEOUT_SIZE  3
+/**
+ * @def SECONDS_PER_LSB
+ * @brief Number of seconds per least significant bit.
+ */
 #define SECONDS_PER_LSB  0.1
+/**
+ * @def LSBS_PER_SECOND
+ * @brief Number of least significant bits per second.
+ */
 #define LSBS_PER_SECOND  10
 
+/**
+ * @enum client_info_type_t
+ * @brief Enumeration for different types of client information.
+ */
 typedef enum {
     PROTOCOL_VERSION = 1,
     BUFFER_INFO = 2,
     COMMAND_TIMEOUT = 3
 }client_info_type_t;
 
+/** @} */ // end of client_info group
+
+/**
+ * @enum mdfu_image_state_t
+ * @brief Enumeration for the state of the MDFU image.
+ */
 typedef enum {
     VALID = 1,
     INVALID = 2
@@ -227,8 +275,15 @@ int mdfu_run_update(image_reader_t *image_reader){
     if(mdfu_start_transfer() < 0){
         goto err_exit;
     }
+    if(MDFU_MAX_COMMAND_DATA_LENGTH < client_info.buffer_size){
+        ERROR("MDFU host protocol buffers are configured for a maximum command data length of %d but the client requires %d", MDFU_MAX_COMMAND_DATA_LENGTH, client_info.buffer_size);
+        goto err_exit;
+    }
     buf = malloc(client_info.buffer_size);
-
+    if(NULL == buf){
+        ERROR("Memory allocation for MDFU protocol buffer failed");
+        goto err_exit;
+    }
     do{
         size = image_reader->read(buf, client_info.buffer_size);
         if(0 > size){

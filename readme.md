@@ -1,6 +1,23 @@
 ## Building
 
-## CMAKE
+Creating the build tree.
+```bash
+cmake -B build
+```
+Building by invocing native build tools through cmake
+```bash
+cmake --build build
+```
+or by using native tools e.g. for make project
+```bash
+cd build
+make
+```
+## Configuration options
+
+- MDFU_MAX_COMMAND_DATA_LENGTH: Defines the maximum MDFU command data length. This must be at least the same size as the MDFU client reported size.
+
+## CMAKE build dependencies
 
 When linking libraries the sequence can be important for CMAKE. For example this application link configuration `target_link_libraries(mdfu mdfulib toolslib transportlib maclib utilslib)`, where `maclib` might depend on `utilslib`, it is necessary that `utilslib` is listed after `maclib`.
 
