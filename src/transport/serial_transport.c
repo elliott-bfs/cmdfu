@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <assert.h>
-#include "mdfu/serial_transport.h"
+#include "mdfu/transport/serial_transport.h"
 #include "mdfu/timeout.h"
 #include "mdfu/logging.h"
 #include "mdfu_config.h"

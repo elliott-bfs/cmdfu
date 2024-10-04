@@ -11,7 +11,7 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h> // inet_pton
-#include "mdfu/socket_mac.h"
+#include "mdfu/mac/socket_mac.h"
 #include "mdfu/logging.h"
 
 static int sock = 0;
@@ -60,7 +60,7 @@ bool SetSocketBlockingEnabled(int fd, bool blocking)
 }
 */
 
-int mac_init(void *conf)
+static int mac_init(void *conf)
 {
     struct socket_config *config = (struct socket_config *) conf;
     struct timeval timeout = {
@@ -94,7 +94,7 @@ int mac_init(void *conf)
     return 0;
 }
 
-int mac_open(void)
+static int mac_open(void)
 {
     DEBUG("Opening socket MAC");
     if(opened){
@@ -118,7 +118,7 @@ int mac_open(void)
     return 0;
 }
 
-int mac_close(void)
+static int mac_close(void)
 {
     if(opened){
         close(sock);
@@ -129,7 +129,7 @@ int mac_close(void)
     }
 }
 
-int mac_read(int size, uint8_t *data)
+static int mac_read(int size, uint8_t *data)
 {
     int status;
 
@@ -140,7 +140,7 @@ int mac_read(int size, uint8_t *data)
     return status;
 }
 
-int mac_write(int size, uint8_t *data)
+static int mac_write(int size, uint8_t *data)
 {
     int status;
     status = send(sock, data, size, 0);

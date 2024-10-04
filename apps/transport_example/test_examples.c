@@ -4,11 +4,11 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <getopt.h>
-#include "mdfu/socket_mac.h"
-#include "mdfu/serial_transport.h"
-#include "mdfu/transport.h"
+#include "mdfu/mac/socket_mac.h"
+#include "mdfu/transport/serial_transport.h"
+#include "mdfu/transport/transport.h"
 #include "mdfu/logging.h"
-#include "mdfu/tools.h"
+#include "mdfu/tools/tools.h"
 #include "mdfu/mdfu.h"
 
 uint8_t get_client_info_frame[] = {0x56, 0x80, 0x01, 0x7f, 0xfe, 0x9e};

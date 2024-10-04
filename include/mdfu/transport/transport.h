@@ -2,10 +2,11 @@
 #define TRANSPORT_H
 
 #include <stdint.h>
-#include "mdfu/mac.h"
+#include "mdfu/mac/mac.h"
 
 typedef enum transport_type{
     SERIAL_TRANSPORT,
+    SPI_TRANSPORT,
     SOCKET_TRANSPORT
 } transport_type_t;
 

@@ -1,6 +1,6 @@
 #include <unity.h>
 #include "mdfu/logging.h"
-#include "mdfu/socket_mac.h"
+#include "mdfu/mac/socket_mac.h"
 
 void setUp(void){
     init_logging(stderr);

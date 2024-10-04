@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "mdfu/transport.h"
+#include "mdfu/transport/transport.h"
 #include "mdfu/image_reader.h"
 #include "mdfu_config.h"
 

@@ -1,5 +1,5 @@
 # Set MDFU parameters and create mdfu_config.h file.
-set(MDFU_MAX_COMMAND_DATA_LENGTH "512")
+set(MDFU_MAX_COMMAND_DATA_LENGTH "1024")
 configure_file(mdfu_config.h.in "${CMAKE_BINARY_DIR}/include/mdfu_config.h")
 
 set(HEADER_LIST

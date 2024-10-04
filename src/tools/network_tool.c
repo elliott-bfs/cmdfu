@@ -3,14 +3,15 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include "mdfu/tools.h"
+#include "mdfu/tools/tools.h"
 #include "mdfu/tools/network.h"
 #include "mdfu/logging.h"
 
 #define TOOL_PARAMETERS_HELP "\
 Networking Tool Options:\n\
     --host <host>: e.g. 127.0.0.1\n\
-    --port <port> e.g. 5559\n"
+    --port <port>: e.g. 5559\n\
+    --transport <transport>: Chose from serial, spi. Default is serial"
 
 /** @brief MAC layer pointer */
 static mac_t *net_mac = NULL;
@@ -28,15 +29,30 @@ static transport_t *net_transport = NULL;
 static int init(void *config){
     struct network_config *net_conf = (struct network_config *) config;
     int status = 0;
+
     DEBUG("Initializing network tool");
-    get_socket_mac(&net_mac);
-    if(0 == status){
+
+    if(NET_TOOL_TRANSPORT_SERIAL == net_conf->transport){
+        get_socket_mac(&net_mac);
         status = net_mac->init((void *) &net_conf->socket_config);
         if(status < 0){
             ERROR("Socket MAC init failed");
         }
         if(0 == status){
             status = get_transport(SERIAL_TRANSPORT, &net_transport);
+            if(0 == status){
+                status = net_transport->init(net_mac, 2);
+            }
+        }
+    }else if(NET_TOOL_TRANSPORT_SPI == net_conf->transport){
+        DEBUG("Configuring SPI transport for network transport");
+        get_socket_packet_mac(&net_mac);
+        status = net_mac->init((void *) &net_conf->socket_config);
+        if(status < 0){
+            ERROR("Socket MAC init failed");
+        }
+        if(0 == status){
+            status = get_transport(SPI_TRANSPORT, &net_transport);
             if(0 == status){
                 status = net_transport->init(net_mac, 2);
             }
@@ -99,6 +115,7 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
     {
         {"host", required_argument, NULL, 'h'},
         {"port", required_argument, NULL, 'p'},
+        {"transport", required_argument, NULL, 't'},
         // Indicator for end of options list
         {0, 0, 0, 0}
     };
@@ -132,7 +149,16 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
             case 'p':
                 net_conf->socket_config.port = atoi(optarg);
                 break;
-
+            case 't':
+                if(0 == strcmp("serial", optarg)){
+                    net_conf->transport = NET_TOOL_TRANSPORT_SERIAL;
+                }else if(0 == strcmp("spi", optarg)){
+                    net_conf->transport = NET_TOOL_TRANSPORT_SPI;
+                }else{
+                    ERROR("Unknown transport %s", optarg);
+                    error_exit = true;
+                }
+                break;
             case '?':
                 ERROR("Error encountered during tool argument parsing");
                 error_exit = true;
@@ -154,11 +180,11 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
         return -1;
     }
     if(0 == net_conf->socket_config.port){
-        ERROR("No port was provided using 5559");
+        WARN("No port was provided using 5559");
         net_conf->socket_config.port = 5559;
     }
     if(NULL == net_conf->socket_config.host){
-        ERROR("No host was provided using localhost");
+        WARN("No host was provided using localhost");
         net_conf->socket_config.host = malloc(sizeof("localhost"));
         strcpy(net_conf->socket_config.host, "localhost");
     }
