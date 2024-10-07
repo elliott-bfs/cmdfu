@@ -102,7 +102,7 @@ static int mac_open(void)
 
 static int mac_close(void)
 {
-    DEBUG("Closing serial MAC");
+    DEBUG("Closing SPI MAC");
     if(device.fd != -1){
         close(device.fd);
         device.fd = -1;
