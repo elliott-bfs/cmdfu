@@ -34,12 +34,12 @@ struct args args = {
     .image = NULL
 };
 
-const char *help_usage = "pymdfu [-h | --help] [-v <level> | --verbose <level>] [-V | --version] [-R | --release-info] [<action>]";
-const char *help_update = "pymdfu [--help | -h] [--verbose <level> | -v <level>] [--config-file <file> | -c <file>] "
+const char *help_usage = "cmdfu [-h | --help] [-v <level> | --verbose <level>] [-V | --version] [-R | --release-info] [<action>]";
+const char *help_update = "cmdfu [--help | -h] [--verbose <level> | -v <level>] [--config-file <file> | -c <file>] "
     "update --tool <tool> --image <image> [<tools-args>...]";
-const char *help_client_info = "pymdfu [--help | -h] [--verbose <level> | -v <level>] [--config-file <file> | -c <file>] "
+const char *help_client_info = "cmdfu [--help | -h] [--verbose <level> | -v <level>] [--config-file <file> | -c <file>] "
     "client-info --tool <tool> [<tools-args>...]";
-const char *help_tools = "pymdfu [--help | -h] [--verbose <level> | -v <level>] tools-help";
+const char *help_tools = "cmdfu [--help | -h] [--verbose <level> | -v <level>] tools-help";
 const char *help_common = "\
 Actions\n\
     <action>        Action to perform. Valid actions are:\n\
@@ -49,10 +49,10 @@ Actions\n\
 \n\
     -h, --help      Show this help message and exit\n\
 \n\
-    -V, --version   Print pymdfu version number and exit\n\
+    -V, --version   Print cmdfu version number and exit\n\
 \n\
     -R, --release-info\n\
-                    help=Print pymdfu release details and exit\n\
+                    Print cmdfu release details and exit\n\
 \n\
 Optional arguments\n\
     -v <level>, --verbose <level>\n\
@@ -63,7 +63,7 @@ Optional arguments\n\
 Usage examples\n\
 \n\
     Update firmware through serial port and with update_image.img\n\
-    pymdfu update --tool serial --image update_image.img --port COM11 --baudrate 115200\n";
+    cmdfu update --tool serial --image update_image.img --port COM11 --baudrate 115200\n";
 
 
 
@@ -335,6 +335,7 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
     {
         {"verbose", required_argument, NULL, 'v'},
         {"version", no_argument, 0, 'V'},
+        {"release", no_argument, 0, 'R'},
         {"help", no_argument, 0, 'h'},
         {"tool", required_argument, NULL, 't'},
         // last entry must be implemented with name as zero
@@ -362,7 +363,7 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
 
         // The leading colon on the options string instructs getopt_long
         // to return a : instead of ? when a missing argument is encountered
-        opt = getopt_long(argc, argv, ":v:hVt:",
+        opt = getopt_long(argc, argv, ":v:hVRt:",
                         long_options, &option_index);
 
         /* Detect the end of the options. */
@@ -385,6 +386,10 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
             printf("Version: %d.%d.%d\n", MDFU_VERSION_MAJOR, MDFU_VERSION_MINOR, MDFU_VERSION_PATCH);
             _exit = true;
             break;
+        case 'R':
+            printf("cmdfu version: %d.%d.%d\n", MDFU_VERSION_MAJOR, MDFU_VERSION_MINOR, MDFU_VERSION_PATCH);
+            printf("MDFU protocol version: %s\n", MDFU_PROTOCOL_VERSION);
+            _exit = true;
         case 'h':
             // We need to defer the help until we have parsed the actions
             // so that we can show specific help for an action

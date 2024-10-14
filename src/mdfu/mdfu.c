@@ -173,6 +173,19 @@ static inline void increment_sequence_number(){
     sequence_number = (sequence_number + 1) & 0x1F;
 }
 
+static int version_check(uint8_t major, uint8_t minor, uint8_t patch){
+    if (MDFU_PROTOCOL_VERSION_MAJOR < major) return -1;
+    if (MDFU_PROTOCOL_VERSION_MAJOR > major) return 1;
+
+    if (MDFU_PROTOCOL_VERSION_MINOR < minor) return -1;
+    if (MDFU_PROTOCOL_VERSION_MINOR > minor) return 1;
+
+    if (MDFU_PROTOCOL_VERSION_PATCH < patch) return -1;
+    if (MDFU_PROTOCOL_VERSION_PATCH > patch) return 1;
+
+    return 0;
+}
+
 /**
  * @brief Log a MDFU packet
  * 
@@ -285,6 +298,13 @@ int mdfu_run_update(image_reader_t *image_reader){
     ssize_t size;
 
     if(mdfu_get_client_info(&client_info) < 0){
+        goto err_exit;
+    }
+    if(version_check(client_info.version.major, client_info.version.minor, client_info.version.patch) < 0)
+    {
+        ERROR("MDFU client protocol version %d.%d.%d not supported. "\
+              "This MDFU host implements MDFU protocol version %s. "\
+                    "Please update cmdfu to the latest version.", client_info.version.major, client_info.version.minor, client_info.version.patch, MDFU_PROTOCOL_VERSION);
         goto err_exit;
     }
     if(mdfu_transport->ioctl != NULL){
