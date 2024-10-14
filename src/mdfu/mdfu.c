@@ -52,6 +52,11 @@
  */
 #define COMMAND_TIMEOUT_SIZE  3
 /**
+ * @def INTER_TRANSACTION_DELAY_SIZE
+ * @brief Size of the inter transaction delay in bytes.
+ */
+#define INTER_TRANSACTION_DELAY_SIZE  4
+/**
  * @def SECONDS_PER_LSB
  * @brief Number of seconds per least significant bit.
  */
@@ -61,6 +66,16 @@
  * @brief Number of least significant bits per second.
  */
 #define LSBS_PER_SECOND  10
+/**
+ * @def ITD_SECONDS_PER_LSB
+ * @brief Number of seconds per least significant bit for inter transaction delay.
+ */
+#define ITD_SECONDS_PER_LSB  1e-9
+/**
+ * @def ITD_LSBS_PER_SECOND
+ * @brief Number of least significant bits per second for inter transaction delay.
+ */
+#define ITD_LSBS_PER_SECOND  1e9
 
 /**
  * @enum client_info_type_t
@@ -69,7 +84,8 @@
 typedef enum {
     PROTOCOL_VERSION = 1,
     BUFFER_INFO = 2,
-    COMMAND_TIMEOUT = 3
+    COMMAND_TIMEOUT = 3,
+    INTER_TRANSACTION_DELAY = 4
 }client_info_type_t;
 
 /** @} */ // end of client_info group
@@ -134,7 +150,7 @@ static const char *MDFU_CMD_NOT_EXECUTED_CAUSE_STR[] = {
     "Sequence number of the received command is invalid"
 };
 
-static transport_t *mdfu_transport;
+static transport_t *mdfu_transport = NULL;
 static uint8_t sequence_number;
 static int send_retries;
 static client_info_t client_info;
@@ -270,6 +286,11 @@ int mdfu_run_update(image_reader_t *image_reader){
 
     if(mdfu_get_client_info(&client_info) < 0){
         goto err_exit;
+    }
+    if(mdfu_transport->ioctl != NULL){
+        if(0 > mdfu_transport->ioctl(TRANSPORT_IOC_INTER_TRANSACTION_DELAY, (float) client_info.inter_transaction_delay * ITD_SECONDS_PER_LSB)){
+            goto err_exit;
+        }
     }
     client_info_valid = true;
     if(mdfu_start_transfer() < 0){
@@ -541,6 +562,14 @@ int mdfu_decode_client_info(uint8_t *data, int length, client_info_t *client_inf
                     }
                 }
                 break;
+
+            case INTER_TRANSACTION_DELAY:
+                if(parameter_length != INTER_TRANSACTION_DELAY_SIZE){
+                    ERROR("Invalid parameter length for MDFU inter transaction delay. Expected %d bug got %d", INTER_TRANSACTION_DELAY_SIZE, parameter_length);
+                }
+                client_info->inter_transaction_delay = le32toh(*((uint32_t *) &data[i]));
+                break;
+
             default:
                 ERROR("Invalid MDFU client info parameter type %d", parameter_type);
                 return -1;
@@ -592,6 +621,7 @@ void print_client_info(client_info_t *client_info){
     "- MDFU protocol version: %d.%d.%d%s\n"
     "- Number of command buffers: %d bytes\n"
     "- Maximum packet data length: %d\n"
+    "- Inter transaction delay: %f seconds\n"
     "Command timeouts\n"
     "- Default timeout: %.1f seconds\n",
     client_info->version.major,
@@ -600,9 +630,10 @@ void print_client_info(client_info_t *client_info){
     internal_version,
     client_info->buffer_count,
     client_info->buffer_size,
+    client_info->inter_transaction_delay * ITD_SECONDS_PER_LSB,
     client_info->default_timeout * SECONDS_PER_LSB);
     for(int i = 1; i < MAX_MDFU_CMD; i++){
-        printf("- %s: %.1f seconds\n", MDFU_COMMANDS_STR[i], client_info->cmd_timeouts[i] * SECONDS_PER_LSB);
+        printf("- %s: %.1f seconds\n", MDFU_COMMANDS_STR[i], client_info->cmd_timeouts[i-1] * SECONDS_PER_LSB);
     }
 }
 
@@ -615,11 +646,18 @@ void print_client_info(client_info_t *client_info){
  * @return int, 0 for success and -1 for error.
  */
 int mdfu_open(void){
-    if(mdfu_transport->open() < 0){
-        DEBUG("MDFU failed to open transport");
-        return -1;
+    int status = 0;
+
+    if(NULL != mdfu_transport){
+        if(mdfu_transport->open() < 0){
+            DEBUG("MDFU failed to open transport");
+            status = -1;
+        }
+    }else{
+        status = -1;
     }
-    return 0;
+
+    return status;
 }
 
 /**
@@ -628,9 +666,15 @@ int mdfu_open(void){
  * @return int, 0 for success and -1 for error.
  */
 int mdfu_close(void){
-    if(0 > mdfu_transport->close()){
-        DEBUG("MDFU failed to close transport");
-        return -1;
+    int status = 0;
+
+    if(NULL != mdfu_transport){
+        if(0 > mdfu_transport->close()){
+            DEBUG("MDFU failed to close transport");
+            status = -1;
+        }
+    }else{
+        status = -1;
     }
-    return 0;
+    return status;
 }
