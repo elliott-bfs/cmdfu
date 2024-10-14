@@ -115,18 +115,17 @@ static int mdfu_client_info(int argc, char **argv){
 static int mdfu_update(int argc, char **argv){
     tool_t *tool;
     void *tool_conf = NULL;
-    FILE *image = NULL;
 
-    if(fwimg_file_reader.open(args.image) < 0){
-        ERROR("Error opening image file: %s", strerror(errno));
-        goto err_exit;
-    }
     if(get_tool_by_type(args.tool, &tool) < 0){
         ERROR("Invalid tool selected");
         goto err_exit;
     }
     if(tool->parse_arguments(argc, argv, &tool_conf) < 0){
         ERROR("Invalid tool argument");
+        goto err_exit;
+    }
+    if(fwimg_file_reader.open(args.image) < 0){
+        ERROR("Opening image file failed: %s", strerror(errno));
         goto err_exit;
     }
     if(tool->init(tool_conf) < 0){
@@ -176,7 +175,13 @@ void tools_help(void){
     }
 }
 
-int parse_debug_level(char *level_name){
+/**
+ * @brief Get logging verbosity level by name
+ *
+ * @param level_name Logging verbosity level name string
+ * @return int, -1 for invalid name, positive values representing valid levels
+ */
+int get_log_level_by_name(char *level_name){
     char *debug_levels[] = {"error", "warning", "info", "debug", NULL};
     int level = -1;
 
@@ -189,12 +194,37 @@ int parse_debug_level(char *level_name){
     return level;
 }
 
+void print_options(const char *message, char **argv){
+
+    int size = 0;
+    // Sum up the number of characters for all options and spaces
+    for (char **ptr = argv; *ptr != NULL; ptr++) {
+        size += strlen(*ptr) + 1; // +1 for the space or null terminator
+    }
+    // Auto Variable Length Array (VLA)
+    // Optional in C11 so might be better with alloca or go for heap with malloc
+    char buf[size];
+    char *pbuf = buf;
+    for (char **ptr = &argv[1]; *ptr != NULL; ptr++){
+        pbuf = stpcpy(pbuf, *ptr);
+        *pbuf = ' ';
+        pbuf++;
+    }
+    *(pbuf - 1) = '\0'; // Replace the last space with a null terminator
+    DEBUG("%s %s", message, buf);
+}
+
 /**
- * @brief Parse common CLI arguments
- * 
- * @param argc Argument count
- * @param argv Argument vector
- * @return int TODO we should return a parser status
+ * @brief Parse update action CLI options
+ *
+ * Parse update action options and return unrecognized options.
+ *
+ * @param argc Argument count for parsing
+ * @param argv Argument vector for parsing
+ * @param new_argc Pointer for storing the number of unrecognized options
+ * @param new_argv Pointer to array of pointers that will contain references to
+ *                 the unrecognized options
+ * @return 0 for success, -1 for error
  */
 int parse_mdfu_update_arguments(int argc, char **argv, int *new_argc, char **new_argv){
     struct option long_options[] =
@@ -241,11 +271,12 @@ int parse_mdfu_update_arguments(int argc, char **argv, int *new_argc, char **new
             break;
 
         case '?':
-            //printf("Not recognized argument %s, dumping it in argv\n", argv[optind -1]);
+            // Here we reference all not recognized options and their arguments in
+            // the new_argv for later parsing by the tool parser
             new_argv[*new_argc] = argv[optind -1]; 
             *new_argc += 1;
-            // check if next item is an option or an option value
-            // if it is an option value add it to the tools arguments list
+            // check if next item is an option or an option argument
+            // if it is an option argument add it to the list of unrecognized options
             if(argv[optind] != NULL){
                 if(argv[optind][0] != '-'){ 
                     new_argv[*new_argc] = argv[optind];
@@ -257,7 +288,6 @@ int parse_mdfu_update_arguments(int argc, char **argv, int *new_argc, char **new
             break;
 
         default:
-            printf("Did not recognize this argument\n");
             error_exit = true;
             break;
         }
@@ -266,8 +296,31 @@ int parse_mdfu_update_arguments(int argc, char **argv, int *new_argc, char **new
             break;
         }
     }
+    if(NULL == args.image){
+        ERROR("Missing required --image option");
+        error_exit = true;
+    }
     if(error_exit) return -1;
     return 0;
+}
+
+/**
+ * @brief Print help text for CLI actions.
+ *
+ * @param action Defines the action for which the help text should be printed
+ */
+void print_help_for_action(action_t action){
+    if(action == ACTION_NONE){
+        printf("%s\n", help_usage);
+        printf("%s\n", help_common);
+    } else if(args.action == ACTION_UPDATE){
+        printf("%s\n", help_update);
+    } else if(args.action == ACTION_CLIENT_INFO){
+        printf("%s\n", help_client_info);
+    } else if(args.action == ACTION_TOOLS_HELP){
+        printf("%s\n", help_tools);
+    }
+
 }
 
 /**
@@ -289,6 +342,7 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
     };
     int opt;
     bool error_exit = false;
+    bool _exit = false;
     bool print_help = false;
 
     // Disable error logging in getopt for not recognized options because
@@ -318,7 +372,7 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
         switch (opt)
         {
         case 'v':
-            int lvl = parse_debug_level(optarg);
+            int lvl = get_log_level_by_name(optarg);
             if(-1 == lvl){
                 ERROR("Invalid verbosity level - %s\n", optarg);
                 error_exit = true;
@@ -329,7 +383,7 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
             break;
         case 'V':
             printf("Version: %d.%d.%d\n", MDFU_VERSION_MAJOR, MDFU_VERSION_MINOR, MDFU_VERSION_PATCH);
-            exit(0);
+            _exit = true;
             break;
         case 'h':
             // We need to defer the help until we have parsed the actions
@@ -357,14 +411,14 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
         case '?':
             // At this point usually an error message would have been printed
             // but we suppressed this by setting opterr to 0 
-            // DEBUG("Tool option found %s", argv[optind -1]);
+            //DEBUG("Tool option found %s", argv[optind -1]);
             // Save the unrecognized option in tools options list
             action_argv[*action_argc] = argv[optind - 1];
             *action_argc += 1;
             // check if next item is an option or an option value
             // if it is an option value add it to the tools arguments list
             if(argv[optind] != NULL){
-                if(argv[optind][0] != '-'){ 
+                if(argv[optind][0] != '-'){
                     action_argv[*action_argc] = argv[optind];
                     *action_argc += 1;
                     // skip next argument in getopt_long
@@ -374,87 +428,69 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
             break;
         case ':':
             printf("Error: Option %s is missing its argument\n", argv[optind -1]);
+            _exit = true;
             error_exit = true;
             break;
         default:
             printf("Did not recognize this argument\n");
+            _exit = true;
             error_exit = true;
         }
-        if(error_exit){
-            // TODO proper exit code or implement function return with error code
-            exit(1);
+        if(_exit){
+            break;
         }
     }
-#if 0
-    printf("options\n");
-    for(char **p = argv; *p != NULL; p++){
-        printf("%s\n", *p);
-    }
-    printf("Arguments\n");
-    for(char **p = &argv[optind]; *p != NULL; p++){
-        printf("%s\n", *p);
-    }
-#endif
-    // Parse non-options
-    // Get action argument
-    if(optind < argc)
-    {
-        for(const char **p = actions; *p != NULL; p++){
-            if(strcmp(argv[optind], *p) == 0){
-                args.action = p - actions;
-                break;
+    if(!_exit){
+    // Remaining item in argv must be an action
+        if(optind < argc)
+        {
+            if(argc - optind > 1){
+                ERROR("Too many actions provided");
+                args.action = ACTION_NONE;
+            }else{
+                for(const char **p = actions; *p != NULL; p++){
+                    if(strcmp(argv[optind], *p) == 0){
+                        args.action = p - actions;
+                        break;
+                    }
+                }
+                if(args.action == ACTION_NONE){
+                    printf("Unkown action \"%s\"\n", argv[optind]);
+                    printf("Valid actions are: ");
+                    for(const char **p = actions; *p != NULL; p++){
+                        printf("%s ", *p);
+                    }
+                    puts("");
+                }
             }
+        }else{
+            print_help = true;
         }
-        if(args.action == ACTION_NONE){
-            printf("Unkown action \"%s\"\n", argv[optind]);
-            printf("Valid actions are: ");
-            for(const char **p = actions; *p != NULL; p++){
-                printf("%s ", *p);
-            }
-            puts("");
+        if(print_help){
+            print_help_for_action(args.action);
+            args.action = ACTION_NONE;
+            _exit = true;
         }
-    }else{
-        print_help = true;
     }
-    if(print_help){
-        if(args.action == ACTION_NONE){
-            printf("%s\n", help_usage);
-            printf("%s\n", help_common);
-        } else if(args.action == ACTION_UPDATE){
-            printf("%s\n", help_update);
-        } else if(args.action == ACTION_CLIENT_INFO){
-            printf("%s\n", help_client_info);
-        } else if(args.action == ACTION_TOOLS_HELP){
-            printf("%s\n", help_tools);
-        }
-        exit(0);
-    }
-    // Add remaining arguments into next parser
-    for(char **p = &argv[++optind]; *p != NULL; p++){
-        action_argv[*action_argc++] = *p;
-    }
-    // Make sure last pointer in tool_argv is a NULL pointer to indicate end of array
-    action_argv[*action_argc] = NULL;
     
-    // Print second level parser arguments
-    // TODO move into function
-    int size = 0;
-    for (char **ptr = action_argv; *ptr != NULL; ptr++){
-        size += strlen(*ptr);
-    }
-    // Auto Variable Length Array (VLA)
-    // Optional in C11 so might be better with alloca or go for heap with malloc
-    char buf[size];
-    char *pbuf = buf;
-    for (char **ptr = &action_argv[1]; *ptr != NULL; ptr++){
-        if(NULL != memccpy(pbuf, *ptr, '\0', size)){
-            pbuf += strlen(*ptr);
-            *pbuf = ' ';
-            pbuf += 1;
+    if(!_exit){
+        // Add remaining arguments into next parser
+        for(char **p = &argv[++optind]; *p != NULL; p++){
+            action_argv[*action_argc] = *p;
+            *action_argc += 1;
+        }
+
+        // Make sure last pointer in tool_argv is a NULL pointer to indicate end of array
+        action_argv[*action_argc] = NULL;
+
+        if(DEBUGLEVEL == debug_level){
+            print_options("Tool arguments after initial parsing", action_argv);
         }
     }
-    *pbuf = '\0';
-    DEBUG("Remaining non-common arguments: %s", buf);
+    if(_exit && error_exit){
+        return -1;
+    }
+    return 0;
 }
 
 /**
@@ -466,27 +502,37 @@ int parse_common_arguments(int argc, char **argv, int *action_argc, char **actio
  */
 int main(int argc, char **argv)
 {
-    init_logging(stderr);
+    int exit_status = 0;
     // Keep it simple and allocate enough space for pointers to all
     // arguments in argv since we don't know how many of the options
     // are tools options.
     char **action_argv = malloc(argc * sizeof(void *));
     int action_argc;
-    parse_common_arguments(argc, argv, &action_argc, action_argv);
+    char **tool_argv;
+    int tool_argc;
 
-    switch(args.action){
-        case ACTION_UPDATE:
-            int tool_argc;
-            char **tool_argv = malloc(action_argc * sizeof(void *));
-            parse_mdfu_update_arguments(action_argc, action_argv, &tool_argc, tool_argv);
-            mdfu_update(tool_argc, tool_argv);
-            break;
-        case ACTION_CLIENT_INFO:
-            mdfu_client_info(action_argc, action_argv);
-            break;
-        case ACTION_TOOLS_HELP:
-            tools_help();
-            break;
+    init_logging(stderr);
+
+    exit_status = parse_common_arguments(argc, argv, &action_argc, action_argv);
+
+    if(0 == exit_status){
+        switch(args.action){
+            case ACTION_UPDATE:
+                tool_argv = malloc(action_argc * sizeof(void *));
+                exit_status = parse_mdfu_update_arguments(action_argc, action_argv, &tool_argc, tool_argv);
+                if(0 == exit_status){
+                    exit_status = mdfu_update(tool_argc, tool_argv);
+                }
+                break;
+            case ACTION_CLIENT_INFO:
+                exit_status = mdfu_client_info(action_argc, action_argv);
+                break;
+            case ACTION_TOOLS_HELP:
+                tools_help();
+                break;
+            default:
+                break;
+        }
     }
-    exit(0);
+    exit(exit_status);
 }
