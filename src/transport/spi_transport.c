@@ -281,7 +281,7 @@ static int read(int *size, uint8_t *data, float timeout){
 static int ioctl(int request, ...){
     va_list args;
     va_start(args, request);
-    if(MAC_IOC_INTER_TRANSACTION_DELAY == request){
+    if(TRANSPORT_IOC_INTER_TRANSACTION_DELAY == request){
         itd_delay = (float) va_arg(args, double);
         return 0;
     }else{
