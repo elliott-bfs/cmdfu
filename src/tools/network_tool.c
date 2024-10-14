@@ -163,7 +163,9 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
     // library. This also sets the optind to the default value of 1 after the
     // initialization, thus we have a dummy value as first element in the array.
     optind = 0;
-    opterr = 1;
+    // We handle error message printing directly
+    opterr = 0;
+
     while (1)
     {
         int option_index = 0;
@@ -198,11 +200,7 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
                 }
                 break;
             case '?':
-                ERROR("Error encountered during tool argument parsing");
-                error_exit = true;
-                break;
-            case ':':
-                ERROR(" xx encountered during tool argument parsing");
+                ERROR("Unrecognized option '%s'", tool_argv[optind - 1]);
                 error_exit = true;
                 break;
             default:
