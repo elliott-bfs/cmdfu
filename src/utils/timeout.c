@@ -23,16 +23,16 @@ int set_timeout(timeout_t *timer, float timeout){
     return 0;
 }
 
-bool timeout_expired(timeout_t timer){
+bool timeout_expired(timeout_t *timer){
     timeout_t now;
     bool expired = false;
 
     if (clock_gettime(CLOCK_MONOTONIC, &now) == -1) {
         perror("clock_gettime");
     }
-    if(now.tv_sec > timer.tv_sec) {
+    if(now.tv_sec > timer->tv_sec) {
         expired = true;
-    }else if(now.tv_sec == timer.tv_sec && now.tv_nsec > timer.tv_nsec){
+    }else if(now.tv_sec == timer->tv_sec && now.tv_nsec > timer->tv_nsec){
         expired = true;
     }
     return expired;
