@@ -433,7 +433,7 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
     float cmd_timeout = default_timeout;
 
     if(client_info_valid){
-        cmd_timeout = client_info.cmd_timeouts[mdfu_cmd_packet->command] * SECONDS_PER_LSB;
+        cmd_timeout = client_info.cmd_timeouts[mdfu_cmd_packet->command - 1] * SECONDS_PER_LSB;
     }
     if(mdfu_cmd_packet->sync){
         sequence_number = 0;
@@ -449,11 +449,11 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
         retries -= 1;
         status = mdfu_transport->write(packet_buffer.size, packet_buffer.buffer);
         if(status < 0){
-            break;
+            continue;
         }
         status = mdfu_transport->read(&rx_packet_buffer.size, rx_packet_buffer.buffer, cmd_timeout);
         if(status < 0){
-            break;
+            continue;
         }
         mdfu_decode_packet(mdfu_status_packet, MDFU_STATUS, (uint8_t *) &rx_packet_buffer.buffer, rx_packet_buffer.size);
         DEBUG("Received MDFU status packet");
@@ -473,7 +473,7 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
         }
     }
     if(retries == 0){
-        ERROR("Tried %d times to send command without success", retries);
+        ERROR("Tried %d times to send command without success", send_retries);
         status = -EIO;
     }
     return status;
@@ -639,8 +639,8 @@ void print_client_info(client_info_t *client_info){
     "MDFU client information\n"
     "--------------------------------\n"
     "- MDFU protocol version: %d.%d.%d%s\n"
-    "- Number of command buffers: %d bytes\n"
-    "- Maximum packet data length: %d\n"
+    "- Number of command buffers: %d\n"
+    "- Maximum packet data length: %d bytes\n"
     "- Inter transaction delay: %f seconds\n"
     "Command timeouts\n"
     "- Default timeout: %.1f seconds\n",

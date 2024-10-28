@@ -3,6 +3,7 @@ set(HEADER_LIST
     "${CMAKE_SOURCE_DIR}/include/mdfu/transport/serial_transport.h"
     "${CMAKE_SOURCE_DIR}/include/mdfu/transport/spi_transport.h"
     "${CMAKE_SOURCE_DIR}/include/mdfu/transport/i2c_transport.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/error.h"
 )
 
 add_library(transportlib transport.c serial_transport.c spi_transport.c i2c_transport.c ${HEADER_LIST})

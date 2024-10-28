@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <assert.h>
+#include "mdfu/error.h"
 #include "mdfu/transport/i2c_transport.h"
 #include "mdfu/timeout.h"
 #include "mdfu/logging.h"
@@ -138,6 +139,12 @@ static int write(int size, uint8_t *data){
     log_frame(frame_size, buffer);
     while(!timeout_expired(&itd_timer));
     status = transport_mac->write(frame_size, buffer);
+    // Ignore errors on write as defined in MDFU spec
+    // Error will be detected once polling for a response 
+    if(status < 0){
+        DEBUG("I2C transport error on sending command");
+        status = 0;
+    }
     if(0 > set_timeout(&itd_timer, itd_delay)){
         status = -1;
     }
@@ -151,7 +158,6 @@ static int write(int size, uint8_t *data){
  * @return ssize_t -1 for an error, otherwise the response length
  */
 static ssize_t poll_for_client_response_length(timeout_t *timer){
-    int frame_size;
     int data_size = -1;
 
     // Poll for a client response
@@ -163,7 +169,7 @@ static ssize_t poll_for_client_response_length(timeout_t *timer){
             set_timeout(&itd_timer, itd_delay);
             if(timeout_expired(timer)){
                 DEBUG("Timeout during polling for response length");
-                return -1;
+                return -TIMEOUT_ERROR;
             }
             continue; // TODO for some errors we may want to terminate this loop. Need to define some non-recoverable MAC error codes
         }
@@ -179,14 +185,14 @@ static ssize_t poll_for_client_response_length(timeout_t *timer){
             uint16_t calc_checksum = calculate_crc16(RSP_LENGTH_FRAME_LENGTH_SIZE, &buffer[RSP_LENGTH_FRAME_LENGTH_START]);
             if(checksum != calc_checksum){
                 ERROR("I2C transport frame checksum mismatch");
-                return -1;
+                return -CHECKSUM_ERROR;
             }
             break;
         }
 
         if(timeout_expired(timer)){
             DEBUG("Timeout during polling for response length");
-            return -1;
+            return -TIMEOUT_ERROR;
         }
     }
     return data_size;
@@ -208,7 +214,7 @@ static int poll_for_client_response(timeout_t *timer, int response_length, uint8
             set_timeout(&itd_timer, itd_delay);
             if(timeout_expired(timer)){
                 DEBUG("Timeout during polling for response");
-                return -1;
+                return -TIMEOUT_ERROR;
             }
             continue; // TODO for some errors we may want to terminate this loop. Need to define some non-recoverable MAC error codes
         }
@@ -219,14 +225,14 @@ static int poll_for_client_response(timeout_t *timer, int response_length, uint8
             uint16_t calc_checksum = calculate_crc16(response_length - FRAME_CHECKSUM_SIZE, &buffer[FRAME_TYPE_SIZE]);
             if(checksum != calc_checksum){
                 ERROR("I2C transport frame checksum mismatch");
-                return -1;
+                return -CHECKSUM_ERROR;
             }
             memcpy(data, &buffer[FRAME_TYPE_SIZE], response_length - FRAME_CHECKSUM_SIZE);
             break;
         }
         if(timeout_expired(timer)){
             DEBUG("Timeout during polling for response");
-            return -1;
+            return -TIMEOUT_ERROR;
         }
     }
     return 0;
@@ -245,18 +251,20 @@ static int poll_for_client_response(timeout_t *timer, int response_length, uint8
 static int read(int *size, uint8_t *data, float timeout){
     timeout_t timer;
     int response_length;
+    int status;
 
     // Poll for a client response
     DEBUG("Starting client response length polling");
     set_timeout(&timer, timeout);
     response_length = poll_for_client_response_length(&timer);
     if(response_length < 0){
-        return -1;
+        return response_length;
     }
     *size = response_length - FRAME_CHECKSUM_SIZE;
     DEBUG("Starting client response polling");
-    if(poll_for_client_response(&timer, response_length, data) < 0){
-        return -1;
+    status = poll_for_client_response(&timer, response_length, data);
+    if(status < 0){
+        return status;
     }
     return 0;
 }
