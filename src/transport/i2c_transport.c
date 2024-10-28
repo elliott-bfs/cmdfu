@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <errno.h>
 #include <assert.h>
 #include "mdfu/transport/i2c_transport.h"
@@ -32,7 +33,10 @@ static const char rsp_frame_type_response = 'R';
  * 
  * This variable holds the MAC layer interface.
  */
-static mac_t transport_mac;
+static mac_t *transport_mac;
+
+static timeout_t itd_timer;
+static float itd_delay = 0.01;
 
 #ifdef MDFU_DYNAMIC_BUFFER_ALLOCATION
 static uint8_t *buffer = NULL;
@@ -60,11 +64,8 @@ static uint8_t *pbuffer = buffer;
  * @return Always returns 0 to indicate success.
  */
 static int init(mac_t *mac, int timeout){
-    transport_mac.open = mac->open;
-    transport_mac.close = mac->close;
-    transport_mac.read = mac->read;
-    transport_mac.write = mac->write;
-    transport_mac.init = mac->init;
+    transport_mac = mac;
+    set_timeout(&itd_timer, 0);
     return 0;
 }
 
@@ -77,7 +78,7 @@ static int init(mac_t *mac, int timeout){
  * @return int Returns 0 on success, or a non-zero error code on failure.
  */
 static int open(void){
-    return transport_mac.open();
+    return transport_mac->open();
 }
 
 /**
@@ -89,7 +90,7 @@ static int open(void){
  * @return int Returns 0 on success, or a non-zero error code on failure.
  */
 static int close(void){
-    return transport_mac.close();
+    return transport_mac->close();
 }
 
 
@@ -128,25 +129,45 @@ static int create_cmd_frame(int size, uint8_t *data, int *frame_size, uint8_t *f
 
 static int write(int size, uint8_t *data){
     int frame_size = 0;
+    int status = 0;
     
     if(create_cmd_frame(size, data, &frame_size, buffer) < 0){
         return -1;
     }
     DEBUG("I2C transport sending frame: ");
     log_frame(frame_size, buffer);
-    return transport_mac.write(frame_size, buffer);
+    while(!timeout_expired(&itd_timer));
+    status = transport_mac->write(frame_size, buffer);
+    if(0 > set_timeout(&itd_timer, itd_delay)){
+        status = -1;
+    }
+    return status;
 }
 
-static ssize_t poll_for_client_response(float timeout){
+/**
+ * @brief Poll for a client response length
+ *
+ * @param timer Pointer to the transport read operation timeout
+ * @return ssize_t -1 for an error, otherwise the response length
+ */
+static ssize_t poll_for_client_response_length(timeout_t *timer){
     int frame_size;
-    timeout_t timer;
     int data_size = -1;
 
-    set_timeout(&timer, timeout);
     // Poll for a client response
     while(true){
-        if(transport_mac.read(RSP_LENGTH_FRAME_SIZE, buffer) < 0){
-            
+        while(!timeout_expired(&itd_timer));
+
+        DEBUG("Polling client for response length");
+        if(transport_mac->read(RSP_LENGTH_FRAME_SIZE, buffer) < 0){
+            set_timeout(&itd_timer, itd_delay);
+            if(timeout_expired(timer)){
+                DEBUG("Timeout during polling for response length");
+                return -1;
+            }
+            continue; // TODO for some errors we may want to terminate this loop. Need to define some non-recoverable MAC error codes
+        }
+        if(0 > set_timeout(&itd_timer, itd_delay)){
             return -1;
         }
         DEBUG("I2C transport received frame: ");
@@ -162,44 +183,103 @@ static ssize_t poll_for_client_response(float timeout){
             }
             break;
         }
-        DEBUG("Received no response from client");
+
         if(timeout_expired(timer)){
-            errno = ETIMEDOUT;
+            DEBUG("Timeout during polling for response length");
             return -1;
         }
     }
     return data_size;
 }
 
-static int read(int *size, uint8_t *data, float timeout){
-    int frame_size;
-    timer_t timer;
-    int data_and_checksum_size, data_size;
+/**
+ * @brief Poll for a client response
+ *
+ * @param timer Pointer to transport read timeout
+ * @param response_length Expected length of the response
+ * @param data Pointer to buffer where response data should be stored
+ * @return ssize_t 0 for success, -1 for error
+ */
+static int poll_for_client_response(timeout_t *timer, int response_length, uint8_t *data){
+    while(true){
+        while(!timeout_expired(&itd_timer));
 
-    // Poll for a client response
-    DEBUG("Start client response polling");
-    data_and_checksum_size = poll_for_client_response(timeout);
-    if(data_and_checksum_size < 0){
-        DEBUG("Client response polling failed");
-        return -1;
-    }
-    data_size = data_and_checksum_size - FRAME_CHECKSUM_SIZE;
-    if(transport_mac.read(FRAME_TYPE_SIZE + data_and_checksum_size, buffer) < 0){
-        return -1;
-    }
+        if(transport_mac->read(FRAME_TYPE_SIZE + response_length, buffer) < 0){
+            set_timeout(&itd_timer, itd_delay);
+            if(timeout_expired(timer)){
+                DEBUG("Timeout during polling for response");
+                return -1;
+            }
+            continue; // TODO for some errors we may want to terminate this loop. Need to define some non-recoverable MAC error codes
+        }
+        set_timeout(&itd_timer, itd_delay);
+        if(rsp_frame_type_response == buffer[0]){
 
-    if(rsp_frame_type_response == buffer[0]){
-
-        uint16_t checksum = *((uint16_t *) &buffer[FRAME_TYPE_SIZE + data_size]);
-        uint16_t calc_checksum = calculate_crc16(data_size, &buffer[FRAME_TYPE_SIZE]);
-        if(checksum != calc_checksum){
-            ERROR("I2C transport frame checksum mismatch");
+            uint16_t checksum = *((uint16_t *) &buffer[FRAME_TYPE_SIZE + response_length - FRAME_CHECKSUM_SIZE]);
+            uint16_t calc_checksum = calculate_crc16(response_length - FRAME_CHECKSUM_SIZE, &buffer[FRAME_TYPE_SIZE]);
+            if(checksum != calc_checksum){
+                ERROR("I2C transport frame checksum mismatch");
+                return -1;
+            }
+            memcpy(data, &buffer[FRAME_TYPE_SIZE], response_length - FRAME_CHECKSUM_SIZE);
+            break;
+        }
+        if(timeout_expired(timer)){
+            DEBUG("Timeout during polling for response");
             return -1;
         }
-    memcpy(data, &buffer[FRAME_TYPE_SIZE], data_size);
-    *size = data_size;
     }
     return 0;
+}
+
+/**
+ * @brief Transport read
+ *
+ * Retrieves a MDFU response
+ *
+ * @param size Pointer for storing the response size
+ * @param data Pointer for storing the response data
+ * @param timeout Timeout for the transport read operation in seconds.
+ * @return int Read operation status, 0 for success, -1 for error
+ */
+static int read(int *size, uint8_t *data, float timeout){
+    timeout_t timer;
+    int response_length;
+
+    // Poll for a client response
+    DEBUG("Starting client response length polling");
+    set_timeout(&timer, timeout);
+    response_length = poll_for_client_response_length(&timer);
+    if(response_length < 0){
+        return -1;
+    }
+    *size = response_length - FRAME_CHECKSUM_SIZE;
+    DEBUG("Starting client response polling");
+    if(poll_for_client_response(&timer, response_length, data) < 0){
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * @brief Transport control
+ *
+ * @param request Transport control request
+ * Request                         | Argument(s)
+ * MAC_IOC_INTER_TRANSACTION_DELAY | float
+ * @param ... Arguments for the control request
+ * @return int
+ */
+static int ioctl(int request, ...){
+    va_list args;
+    va_start(args, request);
+    if(TRANSPORT_IOC_INTER_TRANSACTION_DELAY == request){
+        itd_delay = (float) va_arg(args, double);
+        return 0;
+    }else{
+        return -1;
+    }
+    va_end(args);
 }
 
 transport_t i2c_transport ={
@@ -207,7 +287,8 @@ transport_t i2c_transport ={
     .open = open,
     .read = read,
     .write = write,
-    .init = init
+    .init = init,
+    .ioctl = ioctl
 };
 
 int get_i2c_transport(transport_t **transport){

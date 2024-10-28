@@ -91,6 +91,7 @@ typedef struct{
     uint16_t buffer_size;
     uint16_t default_timeout;
     uint16_t cmd_timeouts[MAX_MDFU_CMD - 1];
+    uint32_t inter_transaction_delay;
 }client_info_t;
 
 

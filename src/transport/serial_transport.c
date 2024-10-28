@@ -144,7 +144,7 @@ int discard_until(uint8_t code, timeout_t timer)
                 break;
             } 
         }
-        if(timeout_expired(timer)){
+        if(timeout_expired(&timer)){
             status = -1;
             errno = ETIMEDOUT;
             break;
@@ -196,7 +196,7 @@ ssize_t read_until(uint8_t code, int max_size, uint8_t *data, timeout_t timer){
                 pdata++;
             }
         }
-        if(timeout_expired(timer)){
+        if(timeout_expired(&timer)){
             status = -1;
             DEBUG("Timeout expired while waiting for frame end code");
             errno = ETIMEDOUT;
@@ -272,7 +272,7 @@ ssize_t read_and_decode_until(int max_size, uint8_t *data, timeout_t timer){
                 }
             }
         }
-        if(timeout_expired(timer)){
+        if(timeout_expired(&timer)){
             status = -1;
             DEBUG("Timeout expired while waiting for frame end code");
             errno = ETIMEDOUT;
@@ -483,7 +483,8 @@ transport_t serial_transport ={
     .open = open,
     .read = read,
     .write = write,
-    .init = init
+    .init = init,
+    .ioctl = NULL
 };
 
 int get_serial_transport(transport_t **transport){

@@ -6,6 +6,6 @@ typedef struct timespec timeout_t;
 
 
 int set_timeout(timeout_t *timer, float timeout);
-bool timeout_expired(timeout_t timer);
+bool timeout_expired(timeout_t *timer);
 
 #endif
