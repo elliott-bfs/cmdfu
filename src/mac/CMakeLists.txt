@@ -8,4 +8,4 @@ set(HEADER_LIST
 
 add_library(maclib socket_mac.c socket_packet_mac.c serial_mac.c i2cdev_mac.c spidev_mac.c ${HEADER_LIST})
 target_include_directories(maclib PUBLIC "${CMAKE_SOURCE_DIR}/include")
-target_include_directories(maclib PUBLIC "${PROJECT_BINARY_DIR}/include")
+target_include_directories(maclib PUBLIC "${CMAKE_BINARY_DIR}/include")

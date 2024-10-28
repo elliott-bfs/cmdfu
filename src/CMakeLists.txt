@@ -3,9 +3,8 @@ source_group(
     PREFIX "Header Files"
     FILES ${HEADER_LIST}
 )
-
-add_subdirectory(mac)
 add_subdirectory(mdfu)
+add_subdirectory(mac)
 add_subdirectory(transport)
 add_subdirectory(tools)
 add_subdirectory(utils)

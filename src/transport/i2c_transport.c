@@ -13,7 +13,7 @@
 #include "mdfu/transport/i2c_transport.h"
 #include "mdfu/timeout.h"
 #include "mdfu/logging.h"
-#include "mdfu_config.h"
+#include "mdfu/mdfu_config.h"
 #include "mdfu/mdfu.h"
 #include "mdfu/checksum.h"
 
@@ -51,7 +51,6 @@ static uint8_t *buffer = NULL;
  * command size, maximum command data length, and frame check sequence.
  */
 static uint8_t buffer[FRAME_BUFFER_MAX_SIZE];
-static uint8_t *pbuffer = buffer;
 #endif
 
 /**
@@ -140,7 +139,7 @@ static int write(int size, uint8_t *data){
     while(!timeout_expired(&itd_timer));
     status = transport_mac->write(frame_size, buffer);
     // Ignore errors on write as defined in MDFU spec
-    // Error will be detected once polling for a response 
+    // Error will be detected once polling for a response
     if(status < 0){
         DEBUG("I2C transport error on sending command");
         status = 0;
