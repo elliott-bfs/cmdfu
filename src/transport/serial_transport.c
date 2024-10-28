@@ -10,7 +10,7 @@
 #include "mdfu/transport/serial_transport.h"
 #include "mdfu/timeout.h"
 #include "mdfu/logging.h"
-#include "mdfu_config.h"
+#include "mdfu/mdfu_config.h"
 #include "mdfu/mdfu.h"
 
 /** @def FRAME_CHECK_SEQUENCE_SIZE

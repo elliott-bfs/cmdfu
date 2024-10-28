@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include "mdfu/transport/transport.h"
 #include "mdfu/image_reader.h"
-#include "mdfu_config.h"
+#include "mdfu/mdfu_config.h"
 
 #define MDFU_COMMAND_SIZE 1
 #define MDFU_SEQUENCE_FIELD_SIZE 1

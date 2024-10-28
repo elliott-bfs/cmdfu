@@ -9,7 +9,7 @@
 #include <sys/ioctl.h>
 #include <stdbool.h>
 #include <linux/spi/spidev.h>
-#include "mdfu_config.h"
+#include "mdfu/mdfu_config.h"
 #include "mdfu/mac/spidev_mac.h"
 #include "mdfu/logging.h"
 

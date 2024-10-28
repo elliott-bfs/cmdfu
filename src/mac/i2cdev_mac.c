@@ -13,7 +13,7 @@
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 
-#include "mdfu_config.h"
+//#include "mdfu_config.h"
 #include "mdfu/mac/mac.h"
 #include "mdfu/logging.h"
 #include "mdfu/mac/i2cdev_mac.h"

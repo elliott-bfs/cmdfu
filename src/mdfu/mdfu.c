@@ -13,7 +13,6 @@
 #include "mdfu/mdfu.h"
 #include "mdfu/logging.h"
 #include "mdfu/image_reader.h"
-#include "mdfu_config.h"
 
 /**
  * @defgroup client_info Client Information
