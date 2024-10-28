@@ -145,6 +145,7 @@ int discard_until(uint8_t code, timeout_t timer)
             } 
         }
         if(timeout_expired(&timer)){
+            DEBUG("Timeout expired while waiting for frame start code");
             status = -1;
             errno = ETIMEDOUT;
             break;
