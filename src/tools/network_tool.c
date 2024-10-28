@@ -57,6 +57,17 @@ static int init(void *config){
                 status = net_transport->init(net_mac, 2);
             }
         }
+    }else if(NET_TOOL_TRANSPORT_I2C == net_conf->transport){
+        get_socket_packet_mac(&net_mac);
+        status = net_mac->init((void * ) &net_conf->socket_config);
+        if(status < 0){
+            ERROR("Socket MAC init failed");
+        }else{
+            status = get_transport(I2C_TRANSPORT, &net_transport);
+            if(0 == status){
+                status = net_transport->init(net_mac, 2);
+            }
+        }
     }
     if(status < 0){
         net_mac = NULL;
@@ -65,6 +76,11 @@ static int init(void *config){
     return status;
 }
 
+/**
+ * @brief Start a session with the networking tool.
+ * 
+ * @return int -1 for error and 0 for success
+ */
 static int open(void){
     DEBUG("Opening network tool");
     if(net_transport != NULL){
@@ -73,6 +89,11 @@ static int open(void){
     return -1;
 }
 
+/**
+ * @brief Close networking tool session.
+ * 
+ * @return int -1 for error and 0 for success
+ */
 static int close(void){
     DEBUG("Closing network tool");
     if(net_transport != NULL){
@@ -81,6 +102,14 @@ static int close(void){
     return -1;
 }
 
+/**
+ * @brief Read MDFU response from networking tool.
+ * 
+ * @param size Pointer where the response size is written to
+ * @param data Pointer where the response is written to
+ * @param timeout Timeout in seconds for this read operation
+ * @return int -1 for error and 0 for success
+ */
 static int read(int *size, uint8_t *data, float timeout){
     if(net_transport != NULL){
         return net_transport->read(size, data, timeout);
@@ -89,6 +118,13 @@ static int read(int *size, uint8_t *data, float timeout){
     }
 }
 
+/**
+ * @brief Write a MDFU command to networking tool.
+ * 
+ * @param size Size of the command
+ * @param data Command
+ * @return int -1 for error and 0 for success
+ */
 static int write(int size, uint8_t *data){
     if(net_transport != NULL){
         return net_transport->write(size, data);
@@ -154,6 +190,8 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
                     net_conf->transport = NET_TOOL_TRANSPORT_SERIAL;
                 }else if(0 == strcmp("spi", optarg)){
                     net_conf->transport = NET_TOOL_TRANSPORT_SPI;
+                }else if(0 == strcmp("i2c", optarg)){
+                    net_conf->transport = NET_TOOL_TRANSPORT_I2C;
                 }else{
                     ERROR("Unknown transport %s", optarg);
                     error_exit = true;

@@ -7,7 +7,8 @@
 typedef enum transport_type{
     SERIAL_TRANSPORT,
     SPI_TRANSPORT,
-    SOCKET_TRANSPORT
+    SOCKET_TRANSPORT,
+    I2C_TRANSPORT
 } transport_type_t;
 
 typedef struct transport {

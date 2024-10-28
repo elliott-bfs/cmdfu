@@ -2,6 +2,7 @@
 #include "mdfu/transport/transport.h"
 #include "mdfu/transport/serial_transport.h"
 #include "mdfu/transport/spi_transport.h"
+#include "mdfu/transport/i2c_transport.h"
 
 int get_transport(transport_type_t type, transport_t **transport){
     
@@ -11,6 +12,9 @@ int get_transport(transport_type_t type, transport_t **transport){
             break;
         case SPI_TRANSPORT:
             get_spi_transport(transport);
+            break;
+        case I2C_TRANSPORT:
+            get_i2c_transport(transport);
             break;
         default:
             errno = EINVAL;

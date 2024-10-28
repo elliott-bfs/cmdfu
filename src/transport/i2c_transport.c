@@ -1,6 +1,6 @@
 /**
- * @file spi_transport.c
- * @brief SPI transport layer.
+ * @file i2c_transport.c
+ * @brief I2C transport layer.
  */
 #include <stdint.h>
 #include <stdbool.h>
@@ -8,26 +8,23 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-#include "mdfu/transport/spi_transport.h"
+#include "mdfu/transport/i2c_transport.h"
 #include "mdfu/timeout.h"
 #include "mdfu/logging.h"
 #include "mdfu_config.h"
 #include "mdfu/mdfu.h"
 #include "mdfu/checksum.h"
 
-static const char frame_length_prefix[] = {'L', 'E', 'N'};
-static const char frame_response_prefix[] = {'R', 'S', 'P'};
 
-#define CLIENT_RSP_PREFIX_SIZE 4
-#define CLIENT_RSP_LEN_LENGTH_SIZE 2
-#define CLIENT_RSP_LEN_LENGTH_START 4
-#define CLIENT_RSP_LEN_CHECKSUM_START 6
-#define CLIENT_RSP_RSP_PAYLOAD_START 4
+static const char rsp_frame_type_length = 'L';
+static const char rsp_frame_type_response = 'R';
 
-#define FRAME_TYPE_CMD 0x11
-#define FRAME_TYPE_RSP_RETRIEVAL 0x55
 #define FRAME_TYPE_SIZE 1
 #define FRAME_CHECKSUM_SIZE 2
+#define RSP_LENGTH_FRAME_SIZE 5
+#define RSP_LENGTH_FRAME_LENGTH_START 1
+#define RSP_LENGTH_FRAME_CRC_START 3
+#define RSP_LENGTH_FRAME_LENGTH_SIZE 2
 
 #define FRAME_BUFFER_MAX_SIZE (FRAME_TYPE_SIZE + MDFU_SEQUENCE_FIELD_SIZE + MDFU_COMMAND_SIZE  + MDFU_MAX_COMMAND_DATA_LENGTH + FRAME_CHECKSUM_SIZE)
 /** 
@@ -114,12 +111,10 @@ static int create_cmd_frame(int size, uint8_t *data, int *frame_size, uint8_t *f
     int i = 0;
     uint16_t frame_check_sequence;
 
-    if(size > (sizeof(buffer) - FRAME_CHECKSUM_SIZE - FRAME_TYPE_SIZE)){
+    if(size > (sizeof(buffer) - FRAME_CHECKSUM_SIZE)){
         errno = EOVERFLOW;
         return -1;
     }
-
-    frame[buf_index++] = FRAME_TYPE_CMD;
 
     for(i = 0;i < size; i++){
         frame[buf_index++] = data[i];
@@ -131,53 +126,15 @@ static int create_cmd_frame(int size, uint8_t *data, int *frame_size, uint8_t *f
     return 0;
 }
 
-static int create_rsp_frame(int size, int *frame_size, uint8_t *frame){
-    int buf_index = 0;
-
-    if(size > (sizeof(buffer) - CLIENT_RSP_PREFIX_SIZE)){
-        errno = EOVERFLOW;
-        ERROR("SPI transport buffer to small to fit command");
-        return -1;
-    }
-    frame[buf_index++] = FRAME_TYPE_RSP_RETRIEVAL;
-    // Zero out remaining frame bytes. These are don't care but its for
-    // better debugging etc. The number of zero bytes is the payload plus
-    // the prefix minus one, since the first byte contains the
-    // frame type
-    for(int i = 0; i < (size + CLIENT_RSP_PREFIX_SIZE - 1); i++){
-        frame[buf_index++] = 0x00;
-    }
-    *frame_size = buf_index;
-    return 0;
-}
-
-static int spi_transfer(int size){
-    int read_size;
-    DEBUG("SPI transport sending frame: ");
-    log_frame(size, buffer);
-    if(transport_mac.write(size, buffer) < 0){
-        return -1;
-    }
-    read_size = transport_mac.read(size, buffer);
-    if(read_size < 0){
-        return -1;
-    }
-    DEBUG("SPI transport received frame: ");
-    log_frame(read_size, buffer);
-    if(read_size != size){
-        ERROR("SPI MAC layer read size did not match write size");
-        return -1;
-    }
-    return 0;
-}
-
 static int write(int size, uint8_t *data){
     int frame_size = 0;
     
     if(create_cmd_frame(size, data, &frame_size, buffer) < 0){
         return -1;
     }
-    return spi_transfer(frame_size);
+    DEBUG("I2C transport sending frame: ");
+    log_frame(frame_size, buffer);
+    return transport_mac.write(frame_size, buffer);
 }
 
 static ssize_t poll_for_client_response(float timeout){
@@ -188,24 +145,19 @@ static ssize_t poll_for_client_response(float timeout){
     set_timeout(&timer, timeout);
     // Poll for a client response
     while(true){
-        if(create_rsp_frame(CLIENT_RSP_LEN_LENGTH_SIZE + FRAME_CHECKSUM_SIZE, &frame_size, buffer) < 0){
-            DEBUG("failed to create response frame");
+        if(transport_mac.read(RSP_LENGTH_FRAME_SIZE, buffer) < 0){
+            
             return -1;
         }
-        if(spi_transfer(frame_size) < 0){
-            DEBUG("SPI transfer failed");
-            return -1;
-        }
+        DEBUG("I2C transport received frame: ");
+        log_frame(RSP_LENGTH_FRAME_SIZE, buffer);
+        if(rsp_frame_type_length == buffer[0]){
 
-        if(frame_length_prefix[0] == buffer[1] && 
-            frame_length_prefix[1] == buffer[2] &&
-            frame_length_prefix[2] == buffer[3]){
-
-            data_size = *((uint16_t *) &buffer[CLIENT_RSP_LEN_LENGTH_START]);
-            uint16_t checksum = *((uint16_t *) &buffer[CLIENT_RSP_LEN_CHECKSUM_START]);
-            uint16_t calc_checksum = calculate_crc16(CLIENT_RSP_LEN_LENGTH_SIZE, &buffer[CLIENT_RSP_LEN_LENGTH_START]);
+            data_size = *((uint16_t *) &buffer[RSP_LENGTH_FRAME_LENGTH_START]);
+            uint16_t checksum = *((uint16_t *) &buffer[RSP_LENGTH_FRAME_CRC_START]);
+            uint16_t calc_checksum = calculate_crc16(RSP_LENGTH_FRAME_LENGTH_SIZE, &buffer[RSP_LENGTH_FRAME_LENGTH_START]);
             if(checksum != calc_checksum){
-                ERROR("SPI transport frame checksum mismatch");
+                ERROR("I2C transport frame checksum mismatch");
                 return -1;
             }
             break;
@@ -222,40 +174,35 @@ static ssize_t poll_for_client_response(float timeout){
 static int read(int *size, uint8_t *data, float timeout){
     int frame_size;
     timer_t timer;
-    int data_size;
+    int data_and_checksum_size, data_size;
 
     // Poll for a client response
     DEBUG("Start client response polling");
-    data_size = poll_for_client_response(timeout);
-    if(data_size < 0){
-        DEBUG("Client polling failed");
+    data_and_checksum_size = poll_for_client_response(timeout);
+    if(data_and_checksum_size < 0){
+        DEBUG("Client response polling failed");
         return -1;
     }
-    if(create_rsp_frame(data_size, &frame_size, buffer) < 0){
-        return -1;
-    }
-    if(spi_transfer(frame_size) < 0){
+    data_size = data_and_checksum_size - FRAME_CHECKSUM_SIZE;
+    if(transport_mac.read(FRAME_TYPE_SIZE + data_and_checksum_size, buffer) < 0){
         return -1;
     }
 
-    if(frame_response_prefix[0] == buffer[1] && 
-        frame_response_prefix[1] == buffer[2] &&
-        frame_response_prefix[2] == buffer[3]){
+    if(rsp_frame_type_response == buffer[0]){
 
-        uint16_t checksum = *((uint16_t *) &buffer[frame_size - 2]);
-        int response_payload_size = frame_size - FRAME_CHECKSUM_SIZE - CLIENT_RSP_PREFIX_SIZE;
-        uint16_t calc_checksum = calculate_crc16(response_payload_size, &buffer[CLIENT_RSP_RSP_PAYLOAD_START]);
+        uint16_t checksum = *((uint16_t *) &buffer[FRAME_TYPE_SIZE + data_size]);
+        uint16_t calc_checksum = calculate_crc16(data_size, &buffer[FRAME_TYPE_SIZE]);
         if(checksum != calc_checksum){
-            ERROR("SPI transport frame checksum mismatch");
+            ERROR("I2C transport frame checksum mismatch");
             return -1;
         }
-    memcpy(data, &buffer[CLIENT_RSP_RSP_PAYLOAD_START], response_payload_size);
-    *size = response_payload_size;
+    memcpy(data, &buffer[FRAME_TYPE_SIZE], data_size);
+    *size = data_size;
     }
     return 0;
 }
 
-transport_t spi_transport ={
+transport_t i2c_transport ={
     .close = close,
     .open = open,
     .read = read,
@@ -263,7 +210,7 @@ transport_t spi_transport ={
     .init = init
 };
 
-int get_spi_transport(transport_t **transport){
-    *transport = &spi_transport;
+int get_i2c_transport(transport_t **transport){
+    *transport = &i2c_transport;
     return 0;
 }
