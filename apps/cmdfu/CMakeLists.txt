@@ -10,6 +10,29 @@ target_include_directories(cmdfu PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(cmdfu PRIVATE mdfulib toolslib transportlib maclib utilslib)
 
+# Specify the installation rules
+install(TARGETS cmdfu
+    RUNTIME DESTINATION bin  # For Windows and Unix-like systems
+)
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_VENDOR "Microchip")
+set(CPACK_PACKAGE_NAME "mdfu-tools")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+    "Microchip Device Firmware Update (MDFU) tools. Includes
+	  the MDFU host command line tool cmdfu."
+)
+set(CPACK_SOURCE_IGNORE_FILES
+    "/build/;"
+    "/test/;"
+    "/cicd/;"
+    "/\\\\.git/;"
+    "/\\\\.vscode/;"
+)
+set(CPACK_GENERATOR "TGZ;DEB")
+set(CPACK_SOURCE_GENERATOR "TBZ2")
+
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Microchip <support@microchip.com>")
+set(CPACK_DEBIAN_PACKAGE_SECTION "admin")
+
 include(CPack)
