@@ -15,6 +15,15 @@
 #define MDFU_HEADER_RESEND 0x40
 #define MDFU_HEADER_SEQUENCE_NUMBER 0x1F
 
+/**
+ * @brief Inter transaction delay default value
+ *
+ * This delay is used during the initial phase of the session where
+ * the host retrieves the client information.
+ * This delay is in seconds and the default value is 0.01 seconds.
+ */
+#define MDFU_INTER_TRANSACTION_DELAY_DEFAULT 0.01
+
 typedef enum
 {
     GET_CLIENT_INFO = 0x01U,

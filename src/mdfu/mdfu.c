@@ -612,7 +612,13 @@ int mdfu_get_client_info(client_info_t *client_info){
         .sequence_number = 0,
         .data_length = 0
     };
-
+    // Configure default transport layer inter transaction delay for transports
+    // that support it
+    if(mdfu_transport->ioctl != NULL){
+        if(0 > mdfu_transport->ioctl(TRANSPORT_IOC_INTER_TRANSACTION_DELAY, MDFU_INTER_TRANSACTION_DELAY_DEFAULT)){
+            return -1;
+        }
+    }
     if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
         return -1;
     }
