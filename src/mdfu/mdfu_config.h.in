@@ -8,6 +8,9 @@
 
 //#define MDFU_DYNAMIC_BUFFER_ALLOCATION
 #define MDFU_MAX_COMMAND_DATA_LENGTH @MDFU_MAX_COMMAND_DATA_LENGTH@
+// The MDFU spec version 1.0.0. requires at least 28 bytes
+// When unbuffered serial transport is used this implementation needs 2 additional bytes 
+#define MDFU_MAX_RESPONSE_DATA_LENGTH @MDFU_MAX_RESPONSE_DATA_LENGTH@
 
 #ifdef MDFU_DYNAMIC_BUFFER_ALLOCATION
     #define ALLOCATE(type, size) (type*)malloc(size * sizeof(type))

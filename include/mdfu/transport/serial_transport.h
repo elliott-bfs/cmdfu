@@ -5,5 +5,5 @@
 #include "mdfu/transport/transport.h"
 
 int get_serial_transport(transport_t **transport);
-
+int get_serial_transport_buffered(transport_t **transport);
 #endif

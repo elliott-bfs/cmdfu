@@ -32,19 +32,19 @@ static int init(void *config){
 
     DEBUG("Initializing network tool");
 
-    if(NET_TOOL_TRANSPORT_SERIAL == net_conf->transport){
+    if(SERIAL_TRANSPORT == net_conf->transport || SERIAL_TRANSPORT_BUFFERED == net_conf->transport ){
         get_socket_mac(&net_mac);
         status = net_mac->init((void *) &net_conf->socket_config);
         if(status < 0){
             ERROR("Socket MAC init failed");
         }
         if(0 == status){
-            status = get_transport(SERIAL_TRANSPORT, &net_transport);
+            status = get_transport(net_conf->transport, &net_transport);
             if(0 == status){
                 status = net_transport->init(net_mac, 2);
             }
         }
-    }else if(NET_TOOL_TRANSPORT_SPI == net_conf->transport){
+    }else if(SPI_TRANSPORT == net_conf->transport){
         DEBUG("Configuring SPI transport for network transport");
         get_socket_packet_mac(&net_mac);
         status = net_mac->init((void *) &net_conf->socket_config);
@@ -57,7 +57,7 @@ static int init(void *config){
                 status = net_transport->init(net_mac, 2);
             }
         }
-    }else if(NET_TOOL_TRANSPORT_I2C == net_conf->transport){
+    }else if(I2C_TRANSPORT == net_conf->transport){
         get_socket_packet_mac(&net_mac);
         status = net_mac->init((void * ) &net_conf->socket_config);
         if(status < 0){
@@ -189,11 +189,13 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
                 break;
             case 't':
                 if(0 == strcmp("serial", optarg)){
-                    net_conf->transport = NET_TOOL_TRANSPORT_SERIAL;
+                    net_conf->transport = SERIAL_TRANSPORT;
+                }else if(0 == strcmp("serial-buffered", optarg)){
+                    net_conf->transport = SERIAL_TRANSPORT_BUFFERED;
                 }else if(0 == strcmp("spi", optarg)){
-                    net_conf->transport = NET_TOOL_TRANSPORT_SPI;
+                    net_conf->transport = SPI_TRANSPORT;
                 }else if(0 == strcmp("i2c", optarg)){
-                    net_conf->transport = NET_TOOL_TRANSPORT_I2C;
+                    net_conf->transport = I2C_TRANSPORT;
                 }else{
                     ERROR("Unknown transport %s", optarg);
                     error_exit = true;

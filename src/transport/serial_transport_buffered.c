@@ -72,6 +72,18 @@
  */
 static mac_t transport_mac;
 
+/** 
+ * @brief Buffer for storing data frames.
+ * 
+ * This buffer is used to store the data frames that are constructed or received
+ * by the transport layer. The size of the buffer is calculated based on the
+ * maximum expected size of the frames, including start/end codes, sequence field,
+ * command size, maximum command data length, and frame check sequence.
+ * 
+ * @note The buffer size is calculated for the worst case scenario where all data
+ * bytes consist of reserved codes that need to be replaced with escape sequences.
+ */
+static uint8_t buffer[FRAME_START_CODE + (MDFU_SEQUENCE_FIELD_SIZE + MDFU_COMMAND_SIZE  + MDFU_MAX_COMMAND_DATA_LENGTH + FRAME_CHECK_SEQUENCE_SIZE) * 2 + FRAME_END_CODE_SIZE];
 
 /**
  * @brief Discards all incoming data until a specific code is encountered or a timeout occurs.
@@ -113,105 +125,55 @@ static int discard_until(uint8_t code, timeout_t timer)
 }
 
 /**
- * @brief Processes a byte of data, handling escape sequences if necessary.
+ * @brief Reads data from MAC layer until a specified code is encountered or a maximum size is reached.
  *
- * This function processes a single byte of data, checking if it is part of an escape sequence.
- * If an escape sequence is detected, it translates the sequence into the appropriate byte.
- * Otherwise, it stores the byte directly. The function updates the data pointer and escape code
- * status as needed.
+ * This function reads bytes one by one from a MAC layer into a buffer until either the specified end code is read,
+ * the buffer is filled to its maximum size, or a timeout occurs.
  *
- * @param tmp The byte to be processed.
- * @param pdata Pointer to the data buffer pointer where the processed byte will be stored.
- * @param escape_code Pointer to a boolean flag indicating if the previous byte was an escape code.
- *
- * @return 0 on success, -1 on error with errno set to EINVAL if an invalid escape sequence is encountered.
- *
- * @note The function assumes that the caller has allocated sufficient space in the data buffer
- *       pointed to by pdata to store the processed byte.
- */
-static int process_byte(uint8_t tmp, uint8_t **pdata, bool *escape_code)
-{
-    if (*escape_code){
-        *escape_code = false;
-        if (tmp == FRAME_START_ESC_SEQ){
-            **pdata = FRAME_START_CODE;
-        }else if (tmp == FRAME_END_ESC_SEQ){
-            **pdata = FRAME_END_CODE;
-    	}else if (tmp == ESCAPE_SEQ_ESC_SEQ){
-            **pdata = ESCAPE_SEQ_CODE;
-        }else{
-            DEBUG("Invalid code (%x) after escape code", tmp);
-            errno = EINVAL;
-            return -1;
-        }
-        (*pdata)++;
-    }else{
-        if (tmp == ESCAPE_SEQ_CODE){
-            *escape_code = true;
-        }else{
-            **pdata = tmp;
-            (*pdata)++;
-        }
-    }
-    return 0;
-}
-
-/**
- * @brief Reads data from a transport layer and decodes it until the frame end code is received.
- *
- * This function reads bytes one by one from a transport layer, handling escape sequences
- * and stopping when the frame end code is encountered or the buffer is full. If an escape
- * sequence is detected, the function decodes it to the original byte. The function also
- * checks for a timeout condition.
- *
+ * @param code The byte code to read until.
  * @param max_size The maximum number of bytes to read into the buffer.
- * @param data A pointer to the buffer where the decoded data will be stored.
- * @param timer A timeout_t structure that defines the timeout condition.
+ * @param data A pointer to the buffer where the read bytes will be stored.
+ * @param timer A timeout structure that determines how long to wait for the end code before giving up.
  *
- * @return On success, the number of bytes read and decoded. On failure, -1 and errno is set
- *         to indicate the error (ENOBUFS for buffer overflow, EINVAL for invalid escape sequence,
- *         ETIMEDOUT for timeout).
- *
- * @warning The function asserts that the status returned by transport_mac.read is less than or equal to 1.
- *          The transport_mac.read function is assumed to be a part of the transport_mac object which should
- *          be defined and initialized elsewhere.
+ * @return On success, the number of bytes read into the buffer (not including the end code).
+ *         On failure, -1 is returned and errno is set appropriately:
+ *         - ENOBUFS if the buffer is too small for the incoming data.
+ *         - ETIMEDOUT if the operation times out before the end code is encountered.
+ *         - Error codes from the MAC layer are passed through
  */
-static ssize_t read_and_decode_until(int max_size, uint8_t *data, timeout_t timer){
+static ssize_t read_until(uint8_t code, int max_size, uint8_t *data, timeout_t timer){
     int status = -1;
     uint8_t tmp;
     uint8_t *pdata = data;
-    bool escape_code = false;
     bool continue_reading = true;
 
-    DEBUG("Receiving frame: ");
     while(continue_reading)
     {
         if(max_size == pdata - data){
             errno = ENOBUFS;
             DEBUG("Buffer overflow in serial transport while waiting for frame end code");
-            break;
-        }
-        status = transport_mac.read(1, &tmp);
-        assert(status <= 1);
-
-        if(status < 0){
             continue_reading = false;
-        }else if(status == 1) {
-            if(tmp == FRAME_END_CODE){
-                status = (int) (pdata - data);
+        }else{
+            status = transport_mac.read(1, &tmp);
+            assert(status <= 1);
+
+            if(status < 0){
                 continue_reading = false;
-            }else{
-                status = process_byte(tmp, &pdata, &escape_code);
-                if(status < 0){
+            }else if(status == 1 ) {
+                if(tmp == code){
+                    status = (int) (pdata - data);
                     continue_reading = false;
+                } else {
+                    *pdata = tmp;
+                    pdata++;
                 }
             }
-        }
-        if(continue_reading && timeout_expired(&timer)){
-            status = -1;
-            DEBUG("Timeout expired while waiting for frame end code");
-            errno = ETIMEDOUT;
-            continue_reading = false;
+            if(continue_reading && timeout_expired(&timer)){
+                status = -1;
+                DEBUG("Timeout expired while waiting for frame end code");
+                errno = ETIMEDOUT;
+                continue_reading = false;
+            }
         }
     }
     return status;
@@ -227,7 +189,7 @@ static ssize_t read_and_decode_until(int max_size, uint8_t *data, timeout_t time
  * @param timeout The default timeout value to be used for transport layer operations.
  * @return Always returns 0 to indicate success.
  */
-static int init(mac_t *mac, int timeout){ // cppcheck-suppress
+static int init(mac_t *mac, int timeout){//NOSONAR
     transport_mac.open = mac->open;
     transport_mac.close = mac->close;
     transport_mac.read = mac->read;
@@ -261,25 +223,30 @@ static int close(void){
 }
 
 /**
- * @brief Encodes data and sends it to MDFU client
+ * @brief Encodes the payload of a frame by escaping special codes.
  *
  * This function takes an array of data and encodes it by inserting escape sequences
- * before any special codes that appear in the data, and then sends the data
- * via the MAC layer to the MDFU client.
+ * before any special codes that appear in the data. The special codes include the
+ * start of frame code, end of frame code, and the escape sequence code itself.
  *
  * @param data_size The size of the input data array.
  * @param data A pointer to the array of data that needs to be encoded.
+ * @param encoded_data A pointer to the array where the encoded data will be stored.
+ * @param encoded_data_size A pointer to an integer where the size of the encoded data will be stored.
  *
+ * @note The encoded_data array should be large enough to accommodate the encoded data,
+ *       which may be larger than the input data due to the addition of escape sequences.
+ *
+ * @warning The function assumes that the encoded_data array has enough space to hold
+ *          the encoded data. If the encoded_data array is not large enough, a buffer
+ *          overflow can occur.
  */
-static int encode_and_send(int data_size, const uint8_t *data){
+static void encode_frame_payload(int data_size, const uint8_t *data, uint8_t *encoded_data, int *encoded_data_size){
     uint8_t code;
-    uint8_t encoded_data[2];
     int size = 0;
-    int status = 0;
 
     for(int i = 0; i < data_size; i++)
     {
-        size = 0;
         code = data[i];
         if(code == FRAME_START_CODE){
             encoded_data[size] = ESCAPE_SEQ_CODE;
@@ -300,15 +267,47 @@ static int encode_and_send(int data_size, const uint8_t *data){
             encoded_data[size] = code;
             size += 1;
         }
-        if(transport_mac.write(size, (uint8_t *) &encoded_data) < 0){
-            status = -1;
-            break;
+    }
+    *encoded_data_size = size;
+}
+
+static int decode_frame_payload(int data_size, const uint8_t *data, int *decoded_data_size, uint8_t *decoded_data){
+    bool escape_code = false;
+    uint8_t code;
+    int size = 0;
+    int status = 0;
+    
+    for(int i = 0; i < data_size; i++)
+    {
+        code = data[i];
+        if(escape_code){
+            if(code == FRAME_START_ESC_SEQ){
+                decoded_data[size] = FRAME_START_CODE;
+            } else if(code == FRAME_END_ESC_SEQ){
+                decoded_data[size] = FRAME_END_CODE;
+            } else if(code == ESCAPE_SEQ_ESC_SEQ){
+                decoded_data[size] = ESCAPE_SEQ_CODE;
+            } else {
+                DEBUG("Invalid code (%x) after escape code", code);
+                status = -1;
+                errno = EINVAL;
+                break;
+            }
+            size += 1;
+        } else {
+            if(code == ESCAPE_SEQ_CODE){
+                escape_code = true;
+            } else {
+                decoded_data[size] = code;
+                size += 1;
+            }
         }
     }
+    *decoded_data_size = size;
     return status;
 }
 
-static void log_frame(int size, const uint8_t *data, uint16_t checksum){
+static void log_frame(int size, uint8_t *data){
     int i = 0;
     if(DEBUGLEVEL > debug_level){
         return;
@@ -318,50 +317,45 @@ static void log_frame(int size, const uint8_t *data, uint16_t checksum){
     for(; i < size - 2; i++){
         TRACE(DEBUGLEVEL, "%02x", data[i]);
     }
-    TRACE(DEBUGLEVEL, " fcs=0x%04x\n", checksum);
+    TRACE(DEBUGLEVEL, " fcs=0x%04x\n", *((uint16_t *) &data[size - 2]));
 }
 
-/**
- * @brief Reads and decodes a MDFU packet from a serial transport.
- *
- * This function reads a MDFU response packet from a serial transport, discarding any bytes until the
- * start of the packet is detected. It then reads and decodes the packet, verifies the checksum,
- * and returns the size of the packet.
- *
- * @param size Pointer to an integer where the size of the MDFU packet will be stored.
- * @param data Pointer to a buffer where the decoded MDFU packet will be stored.
- * @param timeout The timeout period for reading the packet, in seconds.
- *
- * @return 0 on success, -1 on error with errno set appropriately.
- *
- * @note The function assumes that the caller has allocated sufficient space in the data buffer
- *       pointed to by data to store the decoded packet.
- */
 static int read(int *size, uint8_t *data, float timeout){
     ssize_t status;
     uint16_t checksum;
+    int decoded_size;
     timeout_t timer;
     set_timeout(&timer, timeout);
 
     status = discard_until(FRAME_START_CODE, timer);
     if(status < 0){
-        return (int) status;
+        goto exit;
     }
-    status = read_and_decode_until(MDFU_PACKET_BUFFER_SIZE, data, timer);
+
+    status = read_until(FRAME_END_CODE, sizeof(buffer), buffer, timer);
     if(status < 0){
-        return (int) status;
+        goto exit;
     }
     *size = (int) status;
 
+    status = decode_frame_payload(*size, buffer, &decoded_size, data);
+    if(status < 0){
+        goto exit;
+    }
+    *size = decoded_size;
     uint16_t frame_checksum = *((uint16_t *) &data[*size - 2]);
-    log_frame(*size, data, frame_checksum);
+    DEBUG("Got a frame: ");
+    log_frame(*size, data);
+
     checksum = calculate_crc16(*size - 2, data);
     if(checksum != frame_checksum){
         DEBUG("Serial Transport: Frame check sequence verification failed, calculated 0x%04x but got 0x%04x\n", checksum, frame_checksum);
-        return -1;
+        status = -1;
+        goto exit;
     }
     *size -= 2; // remove checksum size to get payload size
-    return 0;
+    exit:
+        return (int) status;
 }
 
 /**
@@ -377,43 +371,26 @@ static int read(int *size, uint8_t *data, float timeout){
  * @return 0 on success, negative value on error with errno set appropriately.
  */
 static int write(int size, uint8_t *data){
-    int status = 0;
-    uint8_t code;
+    int encoded_data_size = 0;
+    int buf_index = 0;
+
+    buffer[buf_index] = FRAME_START_CODE;
+    buf_index += 1;
+
     uint16_t frame_check_sequence = calculate_crc16(size, data);
-    
-    // Send frame start code
-    code = FRAME_START_CODE;
-    status = transport_mac.write(1, &code);
-    if(status < 0){
-        goto exit;
-    }
-    // Send frame payload
-    status = encode_and_send(size, data);
-    if(status < 0){
-        goto exit;
-    }
-    // Send frame checksum
-    code = (uint8_t) frame_check_sequence;
-    status = encode_and_send(1, &code);
-    if(status < 0){
-        goto exit;
-    }
-    code = (uint8_t) (frame_check_sequence >> 8);
-    status = encode_and_send(1, &code);
-    if(status < 0){
-        goto exit;
-    }
-    // Send frame end code
-    code = FRAME_END_CODE;
-    status = transport_mac.write(1, &code);
+    encode_frame_payload(size, data, &buffer[buf_index], &encoded_data_size);
+    buf_index += encoded_data_size;
+    encode_frame_payload(2, (uint8_t *) &frame_check_sequence, &buffer[buf_index], &encoded_data_size);
+    buf_index += encoded_data_size;
 
-    log_frame(size, data, frame_check_sequence);
-
-    exit:
-        return status;
+    buffer[buf_index] = FRAME_END_CODE;
+    buf_index += 1;
+    DEBUG("Sending frame: ");
+    log_frame(buf_index - 2, &buffer[1]);
+    return transport_mac.write(buf_index, buffer);
 }
 
-transport_t serial_transport ={
+transport_t serial_transport_buffered ={
     .close = close,
     .open = open,
     .read = read,
@@ -422,7 +399,7 @@ transport_t serial_transport ={
     .ioctl = NULL
 };
 
-int get_serial_transport(transport_t **transport){
-    *transport = &serial_transport;
+int get_serial_transport_buffered(transport_t **transport){
+    *transport = &serial_transport_buffered;
     return 0;
 }
