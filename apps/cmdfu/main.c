@@ -40,31 +40,30 @@ const char *help_update = "cmdfu [--help | -h] [--verbose <level> | -v <level>] 
 const char *help_client_info = "cmdfu [--help | -h] [--verbose <level> | -v <level>] [--config-file <file> | -c <file>] "
     "client-info --tool <tool> [<tools-args>...]";
 const char *help_tools = "cmdfu [--help | -h] [--verbose <level> | -v <level>] tools-help";
-const char *help_common = "\
-Actions\n\
-    <action>        Action to perform. Valid actions are:\n\
-                    client-info: Get MDFU client information\n\
-                    tools-help:  Get help on tool specific parameters\n\
-                    update:      Perform a firmware update\n\
-\n\
-    -h, --help      Show this help message and exit\n\
-\n\
-    -V, --version   Print cmdfu version number and exit\n\
-\n\
-    -R, --release-info\n\
-                    Print cmdfu release details and exit\n\
-\n\
-Optional arguments\n\
-    -v <level>, --verbose <level>\n\
-            Logging verbosity/severity level. Valid levels are\n\
-            [debug, info, warning, error, critical].\n\
-            Default is info.\n\
-\n\
-Usage examples\n\
-\n\
-    Update firmware through serial port and with update_image.img\n\
-    cmdfu update --tool serial --image update_image.img --port COM11 --baudrate 115200\n";
-
+const char *help_common =
+    "Actions\n"
+    "    <action>        Action to perform. Valid actions are:\n"
+    "    client-info:    Get MDFU client information\n"
+    "    tools-help:     Get help on tool specific parameters\n"
+    "    update:         Perform a firmware update\n"
+    "\n"
+    "    -h, --help      Show this help message and exit\n"
+    "\n"
+    "    -V, --version   Print cmdfu version number and exit\n"
+    "\n"
+    "    -R, --release-info\n"
+    "                    Print cmdfu release details and exit\n"
+    "\n"
+    "Optional arguments\n"
+    "    -v <level>, --verbose <level>\n"
+    "                    Logging verbosity/severity level. Valid levels are\n"
+    "                    [debug, info, warning, error, critical].\n"
+    "                    Default is info.\n"
+    "\n"
+    "Usage examples\n"
+    "\n"
+    "    Update firmware through serial port and with update_image.img\n"
+    "    cmdfu update --tool serial --image update_image.img --port COM11 --baudrate 115200\n";
 
 
 static int mdfu_client_info(int argc, char **argv){
