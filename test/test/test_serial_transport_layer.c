@@ -1,5 +1,6 @@
 #include "unity.h"
 #include "transport/serial_transport.c"
+#include "utils/checksum.c"
 #include "mock_mac.h"
 #include "timeout.h"
 #include "logging.h"
