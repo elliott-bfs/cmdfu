@@ -185,7 +185,7 @@ static int parse_arguments(int tool_argc, char **tool_argv, void **config){
                 break;
 
             case 'p':
-                net_conf->socket_config.port = atoi(optarg);
+                net_conf->socket_config.port = (uint16_t) atoi(optarg);
                 break;
             case 't':
                 if(0 == strcmp("serial", optarg)){
