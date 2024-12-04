@@ -13,6 +13,7 @@
 #include "mdfu/mdfu_config.h"
 #include "mdfu/mdfu.h"
 #include "mdfu/checksum.h"
+#include "mdfu/error.h"
 
 /** @def FRAME_CHECK_SEQUENCE_SIZE
  *  @brief Size of the frame check sequence in bytes.
@@ -347,7 +348,7 @@ static int read(int *size, uint8_t *data, float timeout){
     if(status < 0){
         return (int) status;
     }
-    status = read_and_decode_until(MDFU_PACKET_BUFFER_SIZE, data, timer);
+    status = read_and_decode_until(MDFU_CMD_PACKET_MAX_SIZE, data, timer);
     if(status < 0){
         return (int) status;
     }

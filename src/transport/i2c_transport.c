@@ -18,17 +18,51 @@
 #include "mdfu/checksum.h"
 
 
+/**
+ * @brief Constant representing the response length frame type.
+ */
 static const char rsp_frame_type_length = 'L';
+
+/**
+ * @brief Constant representing the response frame type.
+ */
 static const char rsp_frame_type_response = 'R';
 
+
+/**
+ * @brief Defines the size of the frame type.
+ */
 #define FRAME_TYPE_SIZE 1
+/**
+ * @brief Size of the frame checksum in bytes.
+ */
 #define FRAME_CHECKSUM_SIZE 2
+/**
+ * @brief Defines the size of the response length frame.
+ */
 #define RSP_LENGTH_FRAME_SIZE 5
+/**
+ * @brief Defines the starting position of the frame length in the response.
+ */
 #define RSP_LENGTH_FRAME_LENGTH_START 1
+/**
+ * @brief Defines the starting position of the CRC in the response frame.
+ */
 #define RSP_LENGTH_FRAME_CRC_START 3
+/**
+ * @brief Length of the response frame length field in bytes.
+ */
 #define RSP_LENGTH_FRAME_LENGTH_SIZE 2
 
-#define FRAME_BUFFER_MAX_SIZE (FRAME_TYPE_SIZE + MDFU_SEQUENCE_FIELD_SIZE + MDFU_COMMAND_SIZE  + MDFU_MAX_COMMAND_DATA_LENGTH + FRAME_CHECKSUM_SIZE)
+/**
+ * @brief Defines the maximum size of the frame buffer.
+ *
+ * This macro calculates the maximum size of the frame buffer by summing the sizes of the frame type,
+ * MDFU command packet, and frame checksum. The resulting value represents the total maximum size
+ * that the frame buffer can accommodate.
+ */
+#define FRAME_BUFFER_MAX_SIZE (FRAME_TYPE_SIZE + MDFU_CMD_PACKET_MAX_SIZE + FRAME_CHECKSUM_SIZE)
+
 /** 
  * @brief MAC layer interface used for transport layer communication.
  * 
@@ -36,12 +70,16 @@ static const char rsp_frame_type_response = 'R';
  */
 static mac_t *transport_mac;
 
+/**
+ * @brief I2C transport inter transaction delay timer.
+ */
 static timeout_t itd_timer;
-static float itd_delay = 0.01;
 
-#ifdef MDFU_DYNAMIC_BUFFER_ALLOCATION
-static uint8_t *buffer = NULL;
-#else
+/**
+ * @brief Inter transaction delay in seconds.
+ */
+static float itd_delay = 0.01f;
+
 /** 
  * @brief Buffer for storing data frames.
  * 
@@ -51,7 +89,6 @@ static uint8_t *buffer = NULL;
  * command size, maximum command data length, and frame check sequence.
  */
 static uint8_t buffer[FRAME_BUFFER_MAX_SIZE];
-#endif
 
 /**
  * @brief Initializes the transport layer.
@@ -93,8 +130,16 @@ static int close(void){
     return transport_mac->close();
 }
 
-
-static void log_frame(int size, uint8_t *data){
+/**
+ * @brief Logs transport frame at a specified debug level.
+ *
+ * This function logs the size and payload of a frame if the current
+ * debug level is less than or equal to the specified DEBUGLEVEL.
+ *
+ * @param size The size of the frame.
+ * @param data Pointer to the frame to be logged.
+ */
+static void log_frame(int size, const uint8_t *data){
     int i = 0;
     if(DEBUGLEVEL > debug_level){
         return;
@@ -107,17 +152,26 @@ static void log_frame(int size, uint8_t *data){
     TRACE(DEBUGLEVEL, "\n");
 }
 
+
+/**
+ * Creates a command frame.
+ *
+ * @param size The size of the MDFU packet.
+ * @param data Pointer to the MDFU packet buffer.
+ * @param frame_size Pointer to an integer where the size of the created frame will be stored.
+ * @param frame Pointer to the buffer where the created frame will be stored.
+ * @return 0 on success, -1 on error (with errno set to EOVERFLOW if the input size is too large).
+ */
 static int create_cmd_frame(int size, uint8_t *data, int *frame_size, uint8_t *frame){
     int buf_index = 0;
-    int i = 0;
     uint16_t frame_check_sequence;
 
-    if(size > (sizeof(buffer) - FRAME_CHECKSUM_SIZE)){
+    if((size + FRAME_CHECKSUM_SIZE) > sizeof(buffer)){
         errno = EOVERFLOW;
         return -1;
     }
 
-    for(i = 0;i < size; i++){
+    for(int i = 0;i < size; i++){
         frame[buf_index++] = data[i];
     }
     frame_check_sequence = calculate_crc16(size, data);
@@ -127,6 +181,20 @@ static int create_cmd_frame(int size, uint8_t *data, int *frame_size, uint8_t *f
     return 0;
 }
 
+/**
+ * @brief Sends a MDFU command via I2C transport.
+ *
+ * This function creates a MDFU command packet by using the I2C
+ * transport mechanism.
+ * It logs the frame before sending and handles any errors that
+ * occur during the write operation as per the MDFU specification.
+ * The function also sets a timeout for the operation.
+ *
+ * @param size The size of the MDFU packet to be written.
+ * @param data Pointer to the MDFU packet to be written.
+ * @return int Status of the write operation. Returns 0 on success, 
+ *         -1 on failure.
+ */
 static int write(int size, uint8_t *data){
     int frame_size = 0;
     int status = 0;
@@ -134,9 +202,12 @@ static int write(int size, uint8_t *data){
     if(create_cmd_frame(size, data, &frame_size, buffer) < 0){
         return -1;
     }
-    DEBUG("I2C transport sending frame: ");
+
+    TRACE(DEBUGLEVEL, "DEBUG:I2C transport sending frame: ");
     log_frame(frame_size, buffer);
-    while(!timeout_expired(&itd_timer));
+
+    while(!timeout_expired(&itd_timer)){/* do nothing*/}
+
     status = transport_mac->write(frame_size, buffer);
     // Ignore errors on write as defined in MDFU spec
     // Error will be detected once polling for a response
@@ -150,18 +221,28 @@ static int write(int size, uint8_t *data){
     return status;
 }
 
+
 /**
- * @brief Poll for a client response length
+ * Polls for a client response length within a specified timeout period.
  *
- * @param timer Pointer to the transport read operation timeout
- * @return ssize_t -1 for an error, otherwise the response length
+ * This function continuously polls for a client response length frame using the I2C transport
+ * mechanism. It waits for a response until the specified timeout expires. If a valid response
+ * length frame is received, it verifies the checksum and returns the data size. If the checksum
+ * does not match, it returns a checksum error. If the timeout expires during polling, it returns
+ * a timeout error.
+ *
+ * @param timer Pointer to the timeout structure.
+ * @return The size of the data if a valid response length frame is received.
+ *         -TIMEOUT_ERROR if the timeout expires during polling.
+ *         -CHECKSUM_ERROR if the checksum verification fails.
+ *         -1 for other errors.
  */
 static ssize_t poll_for_client_response_length(timeout_t *timer){
     int data_size = -1;
 
     // Poll for a client response
     while(true){
-        while(!timeout_expired(&itd_timer));
+        while(!timeout_expired(&itd_timer)){/* do nothing*/}
 
         DEBUG("Polling client for response length");
         if(transport_mac->read(RSP_LENGTH_FRAME_SIZE, buffer) < 0){
@@ -170,12 +251,12 @@ static ssize_t poll_for_client_response_length(timeout_t *timer){
                 DEBUG("Timeout during polling for response length");
                 return -TIMEOUT_ERROR;
             }
-            continue; // TODO for some errors we may want to terminate this loop. Need to define some non-recoverable MAC error codes
+            continue;
         }
         if(0 > set_timeout(&itd_timer, itd_delay)){
             return -1;
         }
-        DEBUG("I2C transport received frame: ");
+        TRACE(DEBUGLEVEL, "DEBUG:I2C transport received frame: ");
         log_frame(RSP_LENGTH_FRAME_SIZE, buffer);
         if(rsp_frame_type_length == buffer[0]){
 
@@ -197,17 +278,35 @@ static ssize_t poll_for_client_response_length(timeout_t *timer){
     return data_size;
 }
 
+
 /**
- * @brief Poll for a client response
+ * Polls for a client response within a specified timeout period.
  *
- * @param timer Pointer to transport read timeout
- * @param response_length Expected length of the response
- * @param data Pointer to buffer where response data should be stored
- * @return ssize_t 0 for success, -1 for error
+ * This function continuously polls for a client response until either a valid response is received
+ * or the specified timeout period expires. It reads the response frame from the transport layer,
+ * verifies the frame type, and checks the checksum for data integrity. If the response is valid,
+ * it copies the response data to the provided buffer.
+ *
+ * @param timer Pointer to the timeout structure.
+ * @param response_length Length of the expected response data.
+ * @param data Pointer to the buffer where the response will be copied.
+ * @return 0 on success, or a negative error code on failure:
+ *         -EOVERFLOW if the response frame length exceeds the allocated buffer size.
+ *         -TIMEOUT_ERROR if the polling times out.
+ *         -CHECKSUM_ERROR if there is a checksum mismatch.
+ *         -EINVAL if the response_length is invalid
  */
 static int poll_for_client_response(timeout_t *timer, int response_length, uint8_t *data){
+    if(FRAME_TYPE_SIZE + response_length > sizeof(buffer)){
+        ERROR("I2C transport response frame length (%d) exceeds allocated buffer (%d)", FRAME_TYPE_SIZE + response_length, (int) sizeof(buffer));
+        return -EOVERFLOW;
+    }
+    if(response_length < 2){
+        ERROR("I2C transport: Invalid response length (%d). Expected at least a length of 2.", response_length);
+        return -EINVAL;
+    }
     while(true){
-        while(!timeout_expired(&itd_timer));
+        while(!timeout_expired(&itd_timer)){/* do nothing*/}
 
         if(transport_mac->read(FRAME_TYPE_SIZE + response_length, buffer) < 0){
             set_timeout(&itd_timer, itd_delay);
@@ -215,9 +314,13 @@ static int poll_for_client_response(timeout_t *timer, int response_length, uint8
                 DEBUG("Timeout during polling for response");
                 return -TIMEOUT_ERROR;
             }
-            continue; // TODO for some errors we may want to terminate this loop. Need to define some non-recoverable MAC error codes
+            continue;
         }
         set_timeout(&itd_timer, itd_delay);
+
+        TRACE(DEBUGLEVEL, "DEBUG:I2C transport received response frame: ");
+        log_frame(FRAME_TYPE_SIZE + response_length, buffer);
+
         if(rsp_frame_type_response == buffer[0]){
 
             uint16_t checksum = *((uint16_t *) &buffer[FRAME_TYPE_SIZE + response_length - FRAME_CHECKSUM_SIZE]);
@@ -225,6 +328,10 @@ static int poll_for_client_response(timeout_t *timer, int response_length, uint8
             if(checksum != calc_checksum){
                 ERROR("I2C transport frame checksum mismatch");
                 return -CHECKSUM_ERROR;
+            }
+            if((response_length - FRAME_CHECKSUM_SIZE) > MDFU_RESPONSE_PACKET_MAX_SIZE){
+                ERROR("Received MDFU response packet (%d) exceeds allocated buffer (%d)", response_length - FRAME_CHECKSUM_SIZE, MDFU_RESPONSE_PACKET_MAX_SIZE);
+                return -EOVERFLOW;
             }
             memcpy(data, &buffer[FRAME_TYPE_SIZE], response_length - FRAME_CHECKSUM_SIZE);
             break;
@@ -237,19 +344,22 @@ static int poll_for_client_response(timeout_t *timer, int response_length, uint8
     return 0;
 }
 
+
 /**
- * @brief Transport read
+ * @brief Reads MDFU response from a client.
  *
- * Retrieves a MDFU response
+ * This function polls for a client response length and then reads the client response.
+ * It uses a timeout mechanism to ensure the operations do not hang indefinitely.
  *
- * @param size Pointer for storing the response size
- * @param data Pointer for storing the response data
- * @param timeout Timeout for the transport read operation in seconds.
- * @return int Read operation status, 0 for success, -1 for error
+ * @param size Pointer to an integer where the size of the MDFU response packet will be stored.
+ * @param data Pointer to a buffer where the MDFU response packet will be stored.
+ * @param timeout The maximum time to wait for the client response, in seconds.
+ *
+ * @return 0 on success, or a negative value on error.
  */
 static int read(int *size, uint8_t *data, float timeout){
     timeout_t timer;
-    int response_length;
+    ssize_t response_length;
     int status;
 
     // Poll for a client response
@@ -257,36 +367,28 @@ static int read(int *size, uint8_t *data, float timeout){
     set_timeout(&timer, timeout);
     response_length = poll_for_client_response_length(&timer);
     if(response_length < 0){
-        return response_length;
+        return (int) response_length;
     }
-    *size = response_length - FRAME_CHECKSUM_SIZE;
+    *size = (int) (response_length - FRAME_CHECKSUM_SIZE);
     DEBUG("Starting client response polling");
-    status = poll_for_client_response(&timer, response_length, data);
+    status = poll_for_client_response(&timer, (int) response_length, data);
     if(status < 0){
         return status;
     }
     return 0;
 }
 
-/**
- * @brief Transport control
- *
- * @param request Transport control request
- * Request                         | Argument(s)
- * MAC_IOC_INTER_TRANSACTION_DELAY | float
- * @param ... Arguments for the control request
- * @return int
- */
+
 static int ioctl(int request, ...){
     va_list args;
     va_start(args, request);
+    int result = -1;
     if(TRANSPORT_IOC_INTER_TRANSACTION_DELAY == request){
         itd_delay = (float) va_arg(args, double);
-        return 0;
-    }else{
-        return -1;
+        result = 0;
     }
     va_end(args);
+    return result;
 }
 
 transport_t i2c_transport ={
