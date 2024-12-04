@@ -6,7 +6,7 @@
 #define MDFU_PROTOCOL_VERSION_PATCH @MDFU_PROTOCOL_VERSION_PATCH@
 #define MDFU_PROTOCOL_VERSION "@MDFU_PROTOCOL_VERSION@"
 
-//#define MDFU_DYNAMIC_BUFFER_ALLOCATION
+
 #define MDFU_MAX_COMMAND_DATA_LENGTH @MDFU_MAX_COMMAND_DATA_LENGTH@
 // The MDFU spec version 1.0.0. requires at least 28 bytes
 // When unbuffered serial transport is used this implementation needs 2 additional bytes 
