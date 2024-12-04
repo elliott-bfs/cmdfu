@@ -21,20 +21,20 @@
  * @def MDFU_RESPONSE_STATUS_CODES_SIZE
  * @brief Size in bytes for the repsonse status code field.
  */
-#define MDFU_RESPONSE_STATUS_CODES_SIZE
+#define MDFU_RESPONSE_STATUS_CODES_SIZE 1
 /**
- * @def MDFU_PACKET_BUFFER_SIZE
- * @brief Size in bytes of the packet buffer.
+ * @def MDFU_CMD_PACKET_MAX_SIZE
+ * @brief Size in bytes of the largest expected MDFU command packet.
  * 
- * This size defines the maximum supported MDFU packet size.
+ * This size defines the maximum supported MDFU command packet.
  */
-#define MDFU_PACKET_BUFFER_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_COMMAND_SIZE + MDFU_MAX_COMMAND_DATA_LENGTH)
+#define MDFU_CMD_PACKET_MAX_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_COMMAND_SIZE + MDFU_MAX_COMMAND_DATA_LENGTH)
 
 /**
- * @def MDFU_RESPONSE_MAX_SIZE
+ * @def MDFU_RESPONSE_PACKET_MAX_SIZE
  * @brief Sinze in bytes for the maximum MDFU repsonse
  */
-#define MDFU_RESPONSE_MAX_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_RESPONSE_STATUS_CODES_SIZE + MDFU_MAX_RESPONSE_DATA_LENGTH)
+#define MDFU_RESPONSE_PACKET_MAX_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_RESPONSE_STATUS_CODES_SIZE + MDFU_MAX_RESPONSE_DATA_LENGTH)
 
 typedef enum
 {

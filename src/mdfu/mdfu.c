@@ -7,12 +7,19 @@
 #include <stdio.h>
 #include <errno.h>
 #include <assert.h>
-#include <endian.h>
+#ifdef __has_include
+    #if __has_include(<endian.h>)
+        #include <endian.h>
+    #else
+        #include "mdfu/endian.h"
+    #endif
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include "mdfu/mdfu.h"
 #include "mdfu/logging.h"
 #include "mdfu/image_reader.h"
+#include "mdfu/error.h"
 
 /**
  * @defgroup mdfu_packet MDFU packet definitions
@@ -190,8 +197,8 @@ static uint8_t sequence_number;
 static int send_retries;
 static client_info_t local_client_info;
 static bool client_info_valid = false;
-static uint8_t cmd_packet_buffer[MDFU_PACKET_BUFFER_SIZE];
-static uint8_t status_packet_buffer[MDFU_RESPONSE_MAX_SIZE];
+static uint8_t cmd_packet_buffer[MDFU_CMD_PACKET_MAX_SIZE];
+static uint8_t status_packet_buffer[MDFU_RESPONSE_PACKET_MAX_SIZE];
 
 void mdfu_log_packet(const mdfu_packet_t *packet, mdfu_packet_type_t type);
 ssize_t mdfu_encode_cmd_packet(mdfu_packet_t *mdfu_packet);
@@ -669,7 +676,7 @@ int mdfu_decode_command_timeout(client_info_t *client_info, const uint8_t length
     for(int timeouts = 0; timeouts < (length / 3); timeouts++)
     {
         mdfu_command_t cmd = data[timeouts * COMMAND_TIMEOUT_SIZE];
-        uint16_t timeout = le16toh(*(uint16_t *) &data[1 + timeouts * COMMAND_TIMEOUT_SIZE]);
+        uint16_t timeout = le16toh(*(const uint16_t *) &data[1 + timeouts * COMMAND_TIMEOUT_SIZE]);
 
         if(0 == cmd){ //default timeout
             // Ensure that default timeout is the first timeout that we get
@@ -708,7 +715,7 @@ int mdfu_decode_buffer_info(client_info_t *client_info, const uint8_t length, co
         ERROR("Invalid parameter length for MDFU client buffer info. Expected %d but got %d", BUFFER_INFO_SIZE, length);
         return -1;
     }
-    client_info->buffer_size = le16toh(*((uint16_t *) data));
+    client_info->buffer_size = le16toh(*((const uint16_t *) data));
     client_info->buffer_count = data[2];
     return 0;
 }
@@ -729,7 +736,7 @@ int mdfu_decode_inter_transaction_delay(client_info_t *client_info, const uint8_
         ERROR("Invalid parameter length for MDFU inter transaction delay. Expected %d bug got %d", INTER_TRANSACTION_DELAY_SIZE, length);
         return -1;
     }
-    client_info->inter_transaction_delay = le32toh(*((uint32_t *) data));
+    client_info->inter_transaction_delay = le32toh(*((const uint32_t *) data));
     return 0;
 }
 
