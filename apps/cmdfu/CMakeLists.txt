@@ -1,5 +1,7 @@
+# The project version will add the cmake variables cmdfu_VERSION_MAJOR, cmdfu_VERSION_MINOR
+# and cmdfu_VERSION_PATCH
 project(cmdfu VERSION 0.2.0 LANGUAGES C)
-add_executable(cmdfu main.c)
+add_executable(cmdfu main.c cli_parser.c)
 
 # Create version.h file. The version is set by the project() command.
 configure_file("./version.h.in" "${CMAKE_CURRENT_BINARY_DIR}/version.h")
