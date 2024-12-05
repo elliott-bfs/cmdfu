@@ -4,6 +4,8 @@
 #include "mdfu/mdfu.h"
 #include "mdfu/logging.h"
 
+extern int mdfu_decode_client_info(const uint8_t *data, int length, client_info_t *client_info);
+
 void setUp(void){
     // We need to have the logging initialized or the unit test framework will not compile in
     // the logging module

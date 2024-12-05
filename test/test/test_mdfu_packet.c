@@ -5,6 +5,9 @@
 #include "mdfu/logging.h"
 
 extern int mdfu_get_packet_buffer(mdfu_packet_t *cmd_packet, mdfu_packet_t *status_packet);
+extern void mdfu_log_packet(mdfu_packet_t *cmd_packet, mdfu_packet_type_t type);
+extern ssize_t mdfu_encode_cmd_packet(mdfu_packet_t *mdfu_packet);
+extern int mdfu_decode_packet(mdfu_packet_t *mdfu_packet, mdfu_packet_type_t type, int packet_size);
 
 void setUp(void){
     init_logging(stderr);

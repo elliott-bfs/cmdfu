@@ -1,6 +1,7 @@
 #ifndef TIMEOUT_H
 #define TIMEOUT_H
 #include <time.h>
+#include <stdbool.h>
 
 typedef struct timespec timeout_t;
 
