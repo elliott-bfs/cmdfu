@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.5.0)
-# The version here will add the variables
-# mdfu_VERSION_MAJOR, mdfu_VERSION_MINOR and mdfu_VERSION_PATCH
+
 project(MDFU_Tools)
 
 include(CTest)

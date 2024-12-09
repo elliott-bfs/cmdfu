@@ -6,6 +6,7 @@
 
 typedef enum transport_type{
     SERIAL_TRANSPORT,
+    SERIAL_TRANSPORT_BUFFERED,
     SPI_TRANSPORT,
     SOCKET_TRANSPORT,
     I2C_TRANSPORT

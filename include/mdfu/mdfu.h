@@ -7,13 +7,34 @@
 #include "mdfu/image_reader.h"
 #include "mdfu/mdfu_config.h"
 
+/**
+ * @def MDFU_COMMAND_SIZE
+ * @brief Size of the MDFU command in the packet header.
+ */
 #define MDFU_COMMAND_SIZE 1
+/**
+ * @def MDFU_SEQUENCE_FIELD_SIZE
+ * @brief Size in bytes of the sequence field in the packet header.
+ */
 #define MDFU_SEQUENCE_FIELD_SIZE 1
-#define MDFU_PACKET_BUFFER_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_COMMAND_SIZE + MDFU_MAX_COMMAND_DATA_LENGTH)
+/**
+ * @def MDFU_RESPONSE_STATUS_CODES_SIZE
+ * @brief Size in bytes for the repsonse status code field.
+ */
+#define MDFU_RESPONSE_STATUS_CODES_SIZE 1
+/**
+ * @def MDFU_CMD_PACKET_MAX_SIZE
+ * @brief Size in bytes of the largest expected MDFU command packet.
+ * 
+ * This size defines the maximum supported MDFU command packet.
+ */
+#define MDFU_CMD_PACKET_MAX_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_COMMAND_SIZE + MDFU_MAX_COMMAND_DATA_LENGTH)
 
-#define MDFU_HEADER_SYNC 0x80
-#define MDFU_HEADER_RESEND 0x40
-#define MDFU_HEADER_SEQUENCE_NUMBER 0x1F
+/**
+ * @def MDFU_RESPONSE_PACKET_MAX_SIZE
+ * @brief Sinze in bytes for the maximum MDFU repsonse
+ */
+#define MDFU_RESPONSE_PACKET_MAX_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_RESPONSE_STATUS_CODES_SIZE + MDFU_MAX_RESPONSE_DATA_LENGTH)
 
 typedef enum
 {
@@ -67,12 +88,8 @@ typedef struct
     };
     uint16_t data_length;
     uint8_t *data;
+    uint8_t *buf;
 }mdfu_packet_t;
-
-typedef struct packet_buffer {
-    int size;
-    uint8_t buffer[MDFU_PACKET_BUFFER_SIZE];
-}mdfu_packet_buffer_t;
 
 typedef enum {
     MDFU_CMD = 0,
@@ -90,20 +107,14 @@ typedef struct{
     uint8_t buffer_count;
     uint16_t buffer_size;
     uint16_t default_timeout;
-    uint16_t cmd_timeouts[MAX_MDFU_CMD - 1];
+    uint16_t cmd_timeouts[MAX_MDFU_CMD];
     uint32_t inter_transaction_delay;
 }client_info_t;
-
-
-void mdfu_log_packet(mdfu_packet_t *packet, mdfu_packet_type_t type);
-void mdfu_encode_cmd_packet(mdfu_packet_t *mdfu_packet, uint8_t *encoded_packet, int *encoded_packet_size);
-int mdfu_decode_packet(mdfu_packet_t *decoded_packet, mdfu_packet_type_t type, uint8_t *packet, int packet_size);
-int mdfu_decode_client_info(uint8_t *data, int length, client_info_t *client_info);
 
 int mdfu_init(transport_t *transport, int retries);
 int mdfu_open(void);
 int mdfu_close(void);
 int mdfu_get_client_info(client_info_t *client_info);
-void print_client_info(client_info_t *client_info);
-int mdfu_run_update(image_reader_t *image_reader);
+void print_client_info(const client_info_t *client_info);
+int mdfu_run_update(const image_reader_t *image_reader);
 #endif

@@ -2,14 +2,11 @@
 #define NETWORK_H
 #include "mdfu/tools/tools.h"
 #include "mdfu/mac/socket_mac.h"
-
-#define NET_TOOL_TRANSPORT_SERIAL   0
-#define NET_TOOL_TRANSPORT_SPI      1
-#define NET_TOOL_TRANSPORT_I2C      2
+#include "mdfu/transport/transport.h"
 
 struct network_config {
     struct socket_config socket_config;
-    int transport;
+    transport_type_t transport;
 };
 
 extern tool_t network_tool;
