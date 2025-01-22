@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cmdfu
+spec:
+  containers:
+    - name: buildpack-deps
+      image: buildpack-deps:stable
+      imagePullPolicy: Always
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          cpu: 2
+          memory: 4Gi
+        limits:
+          cpu: 2
+          memory: 8Gi
+    - name: ceedling
+      image: throwtheswitch/madsciencelab:0.3.2
+      imagePullPolicy: Always
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          cpu: 500m
+          memory: 500Mi
+        limits:
+          cpu: 1
+          memory: 1Gi

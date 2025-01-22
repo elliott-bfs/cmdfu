@@ -1,0 +1,83 @@
+// Jenkinsfilek8s v1.2.0
+
+pipeline {
+    agent {
+        kubernetes {
+            defaultContainer 'buildpack-deps'
+            yamlFile 'cicd/cloudprovider.yaml'
+        }
+    }
+
+    environment {
+        ARTIFACTORY_SERVER = 'https://artifacts.microchip.com:7999/artifactory'
+        ARTIFACTORY_MODULE = 'cmdfu'
+        BUILD_FOLDER = 'build'
+        TEST_REPORT_PATH = 'test/build/artifacts/test/*.xml'
+        // When using branch name as part of IVY revision there should not be any forward slashes or dots in the branch name as it will confuse the ivy version parser
+        MODIFIED_BRANCH_NAME = "${BRANCH_NAME}".replace(".", "_").replace("/", "_")
+        IVY_REVISION = "${MODIFIED_BRANCH_NAME}.${BUILD_NUMBER}"
+        SEMVER_REGEX = '^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)+$'
+    }
+    options {
+        timestamps()
+        timeout(activity: true, time: 30, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Install Dependencies') {
+            steps {
+                script {
+                    // Update package list and install CMake
+                    sh '''
+                        apt-get update
+                        apt-get install -y cmake
+                    '''
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                execute("cmake -S ./ -B ./build")
+                execute("cd ./build;make")
+            }
+        }
+        stage('Test') {
+            steps {
+                container ('ceedling') {
+                    script {
+                        // Build should not stop execution when ceedling returns error code. Ceedling will return error code if any tests fail,
+                        // but this will normally terminate execution and test report will just be ignored
+                        execute("cd test;ceedling test:all || true")
+                    }
+                    // store ceedling test report that was generated in junit format
+                    junit env.TEST_REPORT_PATH
+                    archiveArtifacts artifacts: env.TEST_REPORT_PATH
+                }
+            }
+        }
+        
+    }
+}
+
+def execute(String cmd) {
+    if(isUnix()) {
+        sh cmd
+    } else {
+        bat cmd
+    }
+}
+
+def initializeGitForDeployment() {
+    execute("git config --global user.email 'microchip@microchip.com'")
+    execute("git config --global user.name 'Microchip Technology'")
+}
+
+def zipFirmwareArtifact(String sourcePath, String artifactsuffix) {
+    def files = findFiles glob: "${sourcePath}/**"
+    echo "Zipping files in folder ${sourcePath}"
+    if( files.length > 0 ) {
+        def ZipFile = "${BUILD_FOLDER}/${env.ARTIFACTORY_MODULE}-${artifactsuffix}.zip"
+        echo "Zipping to ${ZipFile}"
+        zip archive: true, glob: "**", zipFile: "${ZipFile}", dir: "${sourcePath}"
+    }
+}

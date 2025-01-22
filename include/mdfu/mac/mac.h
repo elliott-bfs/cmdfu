@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 
-typedef struct mac {
+typedef struct mac_ {
     int (* init)(void *);
     int (* open)(void);
     int (* close)(void);

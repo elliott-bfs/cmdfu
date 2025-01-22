@@ -1,6 +1,10 @@
 set(HEADER_LIST
-    "${PROJECT_SOURCE_DIR}/include/mdfu/tools.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/tools/tools.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/tools/network.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/tools/serial.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/tools/spidev.h"
+    "${CMAKE_SOURCE_DIR}/include/mdfu/tools/i2cdev.h"
 )
 
-add_library(toolslib tools.c ${HEADER_LIST})
-target_include_directories(toolslib PUBLIC "${PROJECT_SOURCE_DIR}/include")
+add_library(toolslib tools.c network_tool.c serial_tool.c spidev_tool.c i2cdev_tool.c ${HEADER_LIST})
+target_include_directories(toolslib PUBLIC "${CMAKE_SOURCE_DIR}/include")

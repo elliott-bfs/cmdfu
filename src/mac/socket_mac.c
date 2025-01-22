@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include <errno.h>
 #include <unistd.h> // close()
 #include <strings.h> // bzero()
@@ -10,8 +11,8 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h> // inet_pton
-#include <mdfu/socket_mac.h>
-
+#include "mdfu/mac/socket_mac.h"
+#include "mdfu/logging.h"
 
 static int sock = 0;
 static struct sockaddr_in socket_address;
@@ -59,14 +60,14 @@ bool SetSocketBlockingEnabled(int fd, bool blocking)
 }
 */
 
-int mac_init(void *conf)
+static int mac_init(void *conf)
 {
     struct socket_config *config = (struct socket_config *) conf;
     struct timeval timeout = {
         .tv_sec = 5,
         .tv_usec = 0
     };
-
+    DEBUG("Initializing socket MAC");
     sock = socket(PF_INET, SOCK_STREAM, 0);
     if(sock < 0) {
 		perror("Socket MAC init");
@@ -93,36 +94,42 @@ int mac_init(void *conf)
     return 0;
 }
 
-int mac_open(void)
+static int mac_open(void)
 {
-    puts("MAC opened\n");
+    DEBUG("Opening socket MAC");
     if(opened){
         errno = EBUSY;
         return -EBUSY;
     }
+    char buf[64];
+    inet_ntop (AF_INET, &socket_address.sin_addr, buf, sizeof(buf));
+    DEBUG("Connecting to host %s on port %d",buf , ntohs(socket_address.sin_port));
+
     if(connect(sock, (struct sockaddr *) &socket_address, sizeof(socket_address)) < 0){
         if(errno == EINPROGRESS){
-            fprintf(stderr, "Socket MAC connect timed out\n");
+            ERROR("Socket MAC connect timed out");
         } else {
-            perror("Socket MAC connect failed with: ");
+            ERROR("Socket MAC connect failed with: %s", strerror(errno));
         }
         close(sock);
         return -ETIMEDOUT;
     }
+    opened = true;
     return 0;
 }
 
-int mac_close(void)
+static int mac_close(void)
 {
     if(opened){
         close(sock);
+        opened = false;
         return 0;
     } else {
         return -1;
     }
 }
 
-int mac_read(int size, uint8_t *data)
+static int mac_read(int size, uint8_t *data)
 {
     int status;
 
@@ -133,7 +140,7 @@ int mac_read(int size, uint8_t *data)
     return status;
 }
 
-int mac_write(int size, uint8_t *data)
+static int mac_write(int size, uint8_t *data)
 {
     int status;
     status = send(sock, data, size, 0);
@@ -143,10 +150,15 @@ int mac_write(int size, uint8_t *data)
     return status;
 }
 
-void get_socket_mac(struct mac * mac){
-    mac->init = mac_init;
-    mac->open = mac_open;
-    mac->close = mac_close;
-    mac->read = mac_read;
-    mac->write = mac_write;
+mac_t network_mac = {
+    .open = mac_open,
+    .close = mac_close,
+    .init = mac_init,
+    .write = mac_write,
+    .read = mac_read
+};
+
+
+void get_socket_mac(mac_t **mac){
+    *mac = &network_mac;
 }

@@ -8,6 +8,7 @@ struct socket_config {
     uint16_t port;
 };
 
-void get_socket_mac(struct mac *mac);
+void get_socket_mac(mac_t **mac);
+void get_socket_packet_mac(mac_t **mac);
 
 #endif

@@ -1,56 +1,59 @@
-## Test
+# MDFU host application for Linux (cmdfu)
 
-### Ceedling Installation local
-Install ruby - Note that as of this writing, 25.10.2023, ceedling (gem 0.31.1) did not work with ruby 3.2.x or higher.
+## Configuration
 
-Windows installer:
-https://rubyinstaller.org/
-
-Linux (Debian/Ubuntu etc.)
+Creating the build tree.
 ```bash
-sudo apt-get install ruby
+cmake -B build
 ```
 
-Install ceedling gem
+### Configuration options
+
+- MDFU_MAX_COMMAND_DATA_LENGTH: Defines the maximum MDFU command data length that is supported. This must be at least the same size as the MDFU client reported size.
+- MDFU_MAX_RESPONSE_DATA_LENGTH: Defines the maximumd MDFU response data length that is supported.
+
+Creating the build tree and configuring maximum MDFU command data size.
 ```bash
-sudo gem install ceedling
+cmake -B build -D MDFU_MAX_COMMAND_DATA_LENGTH=1024
 ```
 
-In project directory run
+## Building
+
+Building by invocing native build tools through cmake
 ```bash
-ceedling new test
+cmake --build build
 ```
-This will create a test directory containing ceedling test framework for the project.
+or by using native tools e.g. for make project
+```bash
+cd build
+make
+```
 
-### Running ceedling in docker
+## Running the application from the build tree
 
 ```bash
-docker pull throwtheswitch/madsciencelab
-docker run -it --rm -v /mnt/z/git/projectx:/project throwtheswitch/madsciencelab
+cd .\build\apps\cmdfu\cmdfu
+./cmdfu
 ```
 
-`/mnt/z/git/projectx` is the directory that should be made available in the docker instance as filesystem.
+## Installation from build tree
 
-`project` will be the name for the current directory in the docker image file system. Might as well just set this as root dir e.g. `/`.
-
-### Configuration
-
-project.yml
-
-```
-|-- project_root
-    |
-    |-- test
-        |-- test
-            |--support
-        |-- project.yml
-    |-- build
-    |-- src
+The install script will put the application into the system folders which are included in the search path.
+```bash
+cd ./build
+make install
 ```
 
-```yaml
-:module_generator:
-:project_root: ./
-:source_root: ../
-:test_root: ./test/
+## Creating source and binary package
+
+Create a package after building as a separate step.
+```bash
+cd build
+cpack
+```
+The source and debian package will be available in the ./build directory.
+
+Build and packaging in one step.
+```bash
+cmake --build build --target package
 ```

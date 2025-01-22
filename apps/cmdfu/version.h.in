@@ -1,0 +1,8 @@
+#ifndef VERSION_H
+#define VERSION_H
+
+#define CMDFU_VERSION_MAJOR @cmdfu_VERSION_MAJOR@
+#define CMDFU_VERSION_MINOR @cmdfu_VERSION_MINOR@
+#define CMDFU_VERSION_PATCH @cmdfu_VERSION_PATCH@
+
+#endif
