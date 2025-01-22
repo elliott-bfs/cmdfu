@@ -1,8 +1,16 @@
 # Set MDFU parameters and create mdfu_config.h file.
-set(MDFU_MAX_COMMAND_DATA_LENGTH "1024")
+
+# Check if CONFIG_VALUE is set, otherwise use a default value
+if(NOT DEFINED MDFU_MAX_COMMAND_DATA_LENGTH)
+    set(MDFU_MAX_COMMAND_DATA_LENGTH "1024")
+endif()
+
 # The MDFU spec version 1.0.0. requires at least 28 bytes
 # For the unbuffered serial transport we need 2 additional bytes to hold the checksum
+if(NOT DEFINED MDFU_MAX_RESPONSE_DATA_LENGTH)
 set(MDFU_MAX_RESPONSE_DATA_LENGTH "30")
+endif()
+
 set(MDFU_PROTOCOL_VERSION_MAJOR 1)
 set(MDFU_PROTOCOL_VERSION_MINOR 2)
 set(MDFU_PROTOCOL_VERSION_PATCH 0)
