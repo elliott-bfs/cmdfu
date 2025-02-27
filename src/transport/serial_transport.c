@@ -97,8 +97,11 @@ static int discard_until(uint8_t code, timeout_t timer)
     {
         status = transport_mac.read(1, &data);
         assert(status <= 1);
+        // if we have an error e.g. buffer overrun or framing error
+        // keep going to dispose of any characters until we time out
+        // so that we can have a fresh start on the next attempt
         if(status < 0){
-            continue_discarding = false;
+            continue_discarding = true;
         }else if((status == 1) && (data == code)){
                 status = 0;
                 continue_discarding = false;
@@ -353,7 +356,11 @@ static int read(int *size, uint8_t *data, float timeout){
         return (int) status;
     }
     *size = (int) status;
-
+    // Minimum status response should be 1 byte status and two bytes for CRC
+    if(*size < 3){
+        DEBUG("Serial Transport: Received invalid frame with length %d but minimum is 3", *size);
+        return -1;
+    }
     uint16_t frame_checksum = *((uint16_t *) &data[*size - 2]);
     log_frame(*size, data, frame_checksum);
     checksum = calculate_crc16(*size - 2, data);
