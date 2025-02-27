@@ -514,7 +514,9 @@ int mdfu_get_image_state(mdfu_image_state_t *state){
  * @brief Writes a chunk of firmware update image data.
  *
  * This function reads a chunk of data from the provided image reader and sends a WRITE_CHUNK
- * command with the read data.
+ * command with the read data. Call this function repeatedly to send image data chunks
+ * until the whole image is transferred. For the last data chunk the function will return
+ * less than the requested size.
  *
  * @param[in] image_reader Pointer to an image reader structure.
  * @param[in] size The size of the data chunk to read and write.
@@ -534,9 +536,11 @@ ssize_t mdfu_write_chunk(const image_reader_t *image_reader, int size){
         ERROR("%s", strerror(errno));
         return -1;
     }
-    mdfu_cmd_packet.data_length = (uint16_t) read_size;
-    if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
-        return -1;
+    if(0 != read_size){
+        mdfu_cmd_packet.data_length = (uint16_t) read_size;
+        if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
+            return -1;
+        }
     }
     return read_size;
 }
