@@ -362,7 +362,9 @@ static int read(int *size, uint8_t *data, float timeout){
         return -1;
     }
     uint16_t frame_checksum = *((uint16_t *) &data[*size - 2]);
+#ifdef MDFU_LOG_TRANSPORT_FRAME
     log_frame(*size, data, frame_checksum);
+#endif
     checksum = calculate_crc16(*size - 2, data);
     if(checksum != frame_checksum){
         DEBUG("Serial Transport: Frame check sequence verification failed, calculated 0x%04x but got 0x%04x\n", checksum, frame_checksum);
@@ -415,8 +417,9 @@ static int write(int size, uint8_t *data){
     code = FRAME_END_CODE;
     status = transport_mac.write(1, &code);
 
+#ifdef MDFU_LOG_TRANSPORT_FRAME
     log_frame(size, data, frame_check_sequence);
-
+#endif
     exit:
         return status;
 }
