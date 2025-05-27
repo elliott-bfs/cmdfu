@@ -16,7 +16,20 @@
  * @note The order of the names in this array must match the order of the tools
  *       in the `tools` array and in the tool_type_t enum.
  */
-const char *tool_names[] = {"serial", "network", "spidev", "i2cdev", NULL};
+const char *tool_names[] = {
+#ifdef USE_TOOL_SERIAL
+    "serial",
+#endif
+#ifdef USE_TOOL_NETWORK
+    "network",
+#endif
+#ifdef USE_TOOL_SPI
+    "spidev",
+#endif
+#ifdef USE_TOOL_I2C
+    "i2cdev",
+#endif
+    NULL};
 
 /**
  * @brief Array of tool pointers.
@@ -28,7 +41,20 @@ const char *tool_names[] = {"serial", "network", "spidev", "i2cdev", NULL};
  * @note The order of the tools in this array should match the order of the names
  *       in the `tool_names` array and in the tool_type_t enum.
  */
-static tool_t *tools[] = {&serial_tool, &network_tool, &spidev_tool, &i2cdev_tool, NULL};
+static tool_t *tools[] = {
+#ifdef USE_TOOL_SERIAL
+    &serial_tool,
+#endif
+#ifdef USE_TOOL_NETWORK
+    &network_tool,
+#endif
+#ifdef USE_TOOL_SPI
+    &spidev_tool,
+#endif
+#ifdef USE_TOOL_I2C
+    &i2cdev_tool,
+#endif
+    NULL};
 
 /**
  * @brief Retrieves the name of a tool based on its type.

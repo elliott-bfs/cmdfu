@@ -68,9 +68,7 @@ static void print_options(const char *message, char **argv){
         char buf[size];
         char *pbuf = buf;
         for (char **ptr = argv; *ptr != NULL; ptr++){
-            pbuf = stpcpy(pbuf, *ptr);
-            *pbuf = ' ';
-            pbuf++;
+            pbuf += sprintf(pbuf, "%s ", *ptr);
         }
         *(pbuf - 1) = '\0'; // Replace the last space with a null terminator
         DEBUG("%s %s", message, buf);

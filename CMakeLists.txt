@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5.0)
+cmake_minimum_required(VERSION 3.12)
 
 project(MDFU_Tools)
 
@@ -35,6 +35,24 @@ include_directories("${KERNEL_HEADERS_DIR}/include")
 # C23 -> 23, C17 -> 17, C99 -> 99
 set_property(GLOBAL PROPERTY C_STANDARD 23)
 set_property(GLOBAL PROPERTY C_EXTENSIONS True)
+
+option(WITH_TOOL_I2C "Build with I2C tools" ON)
+option(WITH_TOOL_SPI "Build with SPI tools" ON)
+option(WITH_TOOL_NETWORK "Build with Network tools" ON)
+option(WITH_TOOL_SERIAL "Build with Serial tools" ON)
+
+if (WITH_TOOL_I2C)
+  add_compile_definitions(USE_TOOL_I2C)
+endif()
+if (WITH_TOOL_SPI)
+  add_compile_definitions(USE_TOOL_SPI)
+endif()
+if (WITH_TOOL_NETWORK)
+  add_compile_definitions(USE_TOOL_NETWORK)
+endif()
+if (WITH_TOOL_SERIAL)
+  add_compile_definitions(USE_TOOL_SERIAL)
+endif()
 
 add_subdirectory(apps)
 add_subdirectory(src)
