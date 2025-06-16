@@ -215,6 +215,7 @@ int mdfu_start_transfer(void);
 int mdfu_end_transfer(void);
 ssize_t mdfu_write_chunk(const image_reader_t* image_reader, int size);
 int mdfu_get_image_state(mdfu_image_state_t *state);
+int mdfu_change_mode(void);
 
 /**
  * @brief Increment the MDFU packet sequence number
@@ -446,6 +447,56 @@ int mdfu_run_update(const image_reader_t *image_reader){
 }
 
 /**
+ * @brief Runs the MDFU change mode process.
+ *
+ * This function performs a series of steps to change bootloader mode, including
+ * retrieving client information, checking protocol version compatibility,
+ * setting inter-transaction delays, and writing data chunks. It ensures that
+ * the image state is valid before finalizing the transfer.
+ *
+ * @param image_reader Pointer to the image reader structure that provides the
+ * firmware image.
+ * @return int Returns 0 on success, or -1 on failure.
+ */
+int mdfu_run_change_mode(void) {
+
+  if (mdfu_get_client_info(&local_client_info) < 0) {
+    goto err_exit;
+  }
+  if (version_check(local_client_info.version.major,
+                    local_client_info.version.minor,
+                    local_client_info.version.patch) < 0) {
+    ERROR("MDFU client protocol version %d.%d.%d not supported. "
+          "This MDFU host implements MDFU protocol version %s. "
+          "Please update cmdfu to the latest version.",
+          local_client_info.version.major, local_client_info.version.minor,
+          local_client_info.version.patch, MDFU_PROTOCOL_VERSION);
+    goto err_exit;
+  }
+  if (MDFU_MAX_COMMAND_DATA_LENGTH < local_client_info.buffer_size) {
+    ERROR("MDFU host protocol buffers are configured for a maximum command "
+          "data length of %d but the client requires %d",
+          MDFU_MAX_COMMAND_DATA_LENGTH, local_client_info.buffer_size);
+    goto err_exit;
+  }
+  if (mdfu_transport->ioctl != NULL &&
+      0 > mdfu_transport->ioctl(
+              TRANSPORT_IOC_INTER_TRANSACTION_DELAY,
+              (float)local_client_info.inter_transaction_delay *
+                  ITD_SECONDS_PER_LSB)) {
+    goto err_exit;
+  }
+  client_info_valid = true;
+  if (mdfu_change_mode() < 0) {
+    goto err_exit;
+  }
+  return 0;
+
+err_exit:
+  return -1;
+}
+
+/**
  * @brief Starts a data transfer.
  *
  * This function sends a START_TRANSFER command to initiate a data transfer.
@@ -546,6 +597,25 @@ ssize_t mdfu_write_chunk(const image_reader_t *image_reader, int size){
         }
     }
     return read_size;
+}
+
+/**
+ * @brief Requests mode change from bootloader to application
+ *
+ * This function sends a CHANGE_MODE command to request mode change.
+ *
+ * @param None
+ * @return 0 on success, -1 on failure.
+ */
+int mdfu_change_mode(void) {
+  mdfu_packet_t mdfu_status_packet;
+  mdfu_packet_t mdfu_cmd_packet = {
+      .command = CHANGE_MODE, .sync = false, .data_length = 0};
+  mdfu_get_packet_buffer(&mdfu_cmd_packet, &mdfu_status_packet);
+  if (mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0) {
+    return -1;
+  }
+  return 0;
 }
 
 /**

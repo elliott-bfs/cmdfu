@@ -36,14 +36,14 @@
  */
 #define MDFU_RESPONSE_PACKET_MAX_SIZE (MDFU_SEQUENCE_FIELD_SIZE + MDFU_RESPONSE_STATUS_CODES_SIZE + MDFU_MAX_RESPONSE_DATA_LENGTH)
 
-typedef enum
-{
-    GET_CLIENT_INFO = 0x01U,
-    START_TRANSFER = 0x02U,
-    WRITE_CHUNK = 0x03U,
-    GET_IMAGE_STATE = 0x04U,
-    END_TRANSFER = 0x05U,
-    MAX_MDFU_CMD = 0x06U // Indicates max enum value
+typedef enum {
+  GET_CLIENT_INFO = 0x01U,
+  START_TRANSFER = 0x02U,
+  WRITE_CHUNK = 0x03U,
+  GET_IMAGE_STATE = 0x04U,
+  END_TRANSFER = 0x05U,
+  CHANGE_MODE = 0x06U,
+  MAX_MDFU_CMD = 0x07U // Indicates max enum value
 } mdfu_command_t;
 
 typedef enum
@@ -117,4 +117,5 @@ int mdfu_close(void);
 int mdfu_get_client_info(client_info_t *client_info);
 void print_client_info(const client_info_t *client_info);
 int mdfu_run_update(const image_reader_t *image_reader);
+int mdfu_run_change_mode(void);
 #endif

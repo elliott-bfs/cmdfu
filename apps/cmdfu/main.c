@@ -150,6 +150,66 @@ static int mdfu_update(int argc, char **argv){
 }
 
 /**
+ * @brief Perform a mode change using the specified tool.
+ *
+ * This function handles the process of changing mode by performing the
+ * following steps:
+ * 1. Retrieve the tool based on the specified type.
+ * 2. Parse the arguments for the tool configuration.
+ * 3. Initialize the tool with the parsed configuration.
+ * 4. Initialize the MDFU protocol.
+ * 5. Connect to the tool.
+ * 6. Run the change mode process.
+ * 7. Close the MDFU connection and the firmware image file reader.
+ *
+ * @param argc The number of tool arguments.
+ * @param argv The array of tool arguments.
+ * @return 0 on success, -1 on failure.
+ */
+static int mdfu_change_mode(int argc, char **argv) {
+  tool_t *tool;
+  void *tool_conf = NULL;
+
+  if (get_tool_by_type(args.tool, &tool) < 0) {
+    ERROR("Invalid tool selected");
+    goto err_exit;
+  }
+  if (tool->parse_arguments(argc, argv, &tool_conf) < 0) {
+    ERROR("Invalid tool argument");
+    goto err_exit;
+  }
+  if (tool->init(tool_conf) < 0) {
+    ERROR("Tool initialization failed");
+    goto err_exit;
+  }
+
+  if (mdfu_init(&tool->ops, 2) < 0) {
+    ERROR("MDFU protocol initialization failed");
+    goto err_exit;
+  }
+
+  if (mdfu_open() < 0) {
+    ERROR("Connecting to tool failed");
+    goto err_exit;
+  }
+
+  if (mdfu_run_change_mode() < 0) {
+    ERROR("Change mode failed");
+    goto err_exit;
+  }
+  mdfu_close();
+  printf("Mode change completed successfully\n");
+  return 0;
+
+err_exit:
+  mdfu_close();
+  if (NULL != tool_conf) {
+    free(tool_conf);
+  }
+  return -1;
+}
+
+/**
  * @brief Displays help information for all available tools.
  * @brief Performs firmware update using the specified tool configuration.
  * This function iterates through all the tool names and retrieves the corresponding tool
@@ -213,6 +273,9 @@ int main(int argc, char **argv)
             case ACTION_CLIENT_INFO:
                 exit_status = mdfu_client_info(action_argc, action_argv);
                 break;
+            case ACTION_CHANGE_MODE:
+              exit_status = mdfu_change_mode(action_argc, action_argv);
+              break;
             case ACTION_TOOLS_HELP:
                 tools_help();
                 break;

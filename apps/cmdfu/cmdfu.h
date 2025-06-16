@@ -11,11 +11,12 @@
  * This enumeration defines the possible actions that can be taken.
  */
 typedef enum {
-    ACTION_UPDATE = 0,
-    ACTION_CLIENT_INFO = 1,
-    ACTION_TOOLS_HELP = 2,
-    ACTION_NONE = 3
-}action_t;
+  ACTION_UPDATE = 0,
+  ACTION_CLIENT_INFO = 1,
+  ACTION_TOOLS_HELP = 2,
+  ACTION_CHANGE_MODE = 3,
+  ACTION_NONE = 4
+} action_t;
 
 /**
  * struct args - Structure to hold data from parsed command line arguments.
