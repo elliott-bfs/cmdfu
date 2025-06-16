@@ -429,7 +429,7 @@ int mdfu_run_update(const image_reader_t *image_reader){
         if(size < 0){
             goto err_exit;
         }
-    // last data chunck read will be zero or less than client buffer size
+    // last data chunk read will be zero or less than client buffer size
     }while(size == local_client_info.buffer_size);
 
     if(mdfu_get_image_state(&state) < 0){
@@ -492,16 +492,9 @@ int mdfu_run_dump(const image_writer_t *image_writer){
         if(size < 0){
             goto err_exit;
         }
-    // last data chunck read will be zero or less than client buffer size
+    // last data chunk read will be zero or less than client buffer size
     }while(size == local_client_info.buffer_size);
 
-    if(mdfu_get_image_state(&state) < 0){
-        goto err_exit;
-    }
-    if(state != VALID){
-        ERROR("Image state %d is invalid", state);
-        goto err_exit;
-    }
     if(mdfu_end_transfer() < 0){
         goto err_exit;
     }
@@ -681,6 +674,8 @@ ssize_t mdfu_read_chunk(const image_writer_t *image_writer, int size){
         .data_length = 0
     };
     mdfu_packet_t mdfu_status_packet;
+    ssize_t write_size = 0;
+
     mdfu_get_packet_buffer(&mdfu_cmd_packet, &mdfu_status_packet);
 
     // Send the command to request a chunk from the client
@@ -688,13 +683,16 @@ ssize_t mdfu_read_chunk(const image_writer_t *image_writer, int size){
         return -1;
     }
 
-    // Write the received data to the image writer
-    ssize_t write_size = image_writer->write(mdfu_status_packet.data, mdfu_status_packet.data_length);
-    if(write_size < 0){
-        ERROR("%s", strerror(errno));
-        return -1;
+    if(mdfu_status_packet.data_length > 0){
+        // Write the received data to the image writer
+        write_size = image_writer->write(mdfu_status_packet.data, mdfu_status_packet.data_length);
+        if(write_size < 0){
+            ERROR("%s", strerror(errno));
+            return -1;
+        }
     }
-    if(write_size == 0){
+    else
+    {
         DEBUG("No more data to write from client");
     }
     return write_size;
