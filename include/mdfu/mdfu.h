@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include "mdfu/transport/transport.h"
 #include "mdfu/image_reader.h"
+#include "mdfu/image_writer.h"
 #include "mdfu/mdfu_config.h"
 
 /**
@@ -43,7 +44,8 @@ typedef enum {
   GET_IMAGE_STATE = 0x04U,
   END_TRANSFER = 0x05U,
   CHANGE_MODE = 0x06U,
-  MAX_MDFU_CMD = 0x07U // Indicates max enum value
+  READ_CHUNK = 0x07U,
+  MAX_MDFU_CMD = 0x08U // Indicates max enum value
 } mdfu_command_t;
 
 typedef enum
@@ -117,5 +119,6 @@ int mdfu_close(void);
 int mdfu_get_client_info(client_info_t *client_info);
 void print_client_info(const client_info_t *client_info);
 int mdfu_run_update(const image_reader_t *image_reader);
+int mdfu_run_dump(const image_writer_t *image_writer);
 int mdfu_run_change_mode(void);
 #endif

@@ -150,6 +150,72 @@ static int mdfu_update(int argc, char **argv){
 }
 
 /**
+ * @brief Perform a firmware dump (download) using the specified tool and output file.
+ *
+ * This function handles the process of dumping firmware by performing the following steps:
+ * 1. Retrieve the tool based on the specified type.
+ * 2. Parse the arguments for the tool configuration.
+ * 3. Open the output file for writing the dumped firmware.
+ * 4. Initialize the tool with the parsed configuration.
+ * 5. Initialize the MDFU protocol.
+ * 6. Connect to the tool.
+ * 7. Run the firmware dump process.
+ * 8. Close the MDFU connection and the output file writer.
+ *
+ * @param argc The number of tool arguments.
+ * @param argv The array of tool arguments.
+ * @return 0 on success, -1 on failure.
+ */
+static int mdfu_dump(int argc, char **argv){
+    tool_t *tool;
+    void *tool_conf = NULL;
+
+    if(get_tool_by_type(args.tool, &tool) < 0){
+        ERROR("Invalid tool selected");
+        goto err_exit;
+    }
+    if(tool->parse_arguments(argc, argv, &tool_conf) < 0){
+        ERROR("Invalid tool argument");
+        goto err_exit;
+    }
+    if(fwimg_file_writer.open(args.image) < 0){
+        ERROR("Opening output file failed: %s", strerror(errno));
+        goto err_exit;
+    }
+    if(tool->init(tool_conf) < 0){
+        ERROR("Tool initialization failed");
+        goto err_exit;
+    }
+
+    if(mdfu_init(&tool->ops, 2) < 0){
+        ERROR("MDFU protocol initialization failed");
+        goto err_exit;
+    }
+
+    if(mdfu_open() < 0){
+        ERROR("Connecting to tool failed");
+        goto err_exit;
+    }
+
+    if(mdfu_run_dump(&fwimg_file_writer) < 0){
+        ERROR("Firmware dump failed");
+        goto err_exit;
+    }
+    mdfu_close();
+    fwimg_file_writer.close();
+    printf("Firmware dump completed successfully\n");
+    return 0;
+
+    err_exit:
+        fwimg_file_writer.close();
+        mdfu_close();
+        if(NULL != tool_conf){
+            free(tool_conf);
+        }
+        return -1;
+}
+
+/**
  * @brief Perform a mode change using the specified tool.
  *
  * This function handles the process of changing mode by performing the
@@ -273,11 +339,18 @@ int main(int argc, char **argv)
             case ACTION_CLIENT_INFO:
                 exit_status = mdfu_client_info(action_argc, action_argv);
                 break;
-            case ACTION_CHANGE_MODE:
-              exit_status = mdfu_change_mode(action_argc, action_argv);
-              break;
             case ACTION_TOOLS_HELP:
                 tools_help();
+                break;
+            case ACTION_CHANGE_MODE:
+                exit_status = mdfu_change_mode(action_argc, action_argv);
+                break;
+            case ACTION_DUMP:
+                tool_argv = malloc(action_argc * sizeof(void *));
+                exit_status = parse_mdfu_update_arguments(action_argc, action_argv, &tool_argc, tool_argv);
+                if(0 == exit_status){
+                    exit_status = mdfu_dump(tool_argc, tool_argv);
+                }
                 break;
             default:
                 break;
