@@ -9,13 +9,15 @@
 #include "mdfu/mdfu_config.h"
 #include "cmdfu.h"
 
-static const char *actions[] = {"update", "client-info", "tools-help", NULL};
+static const char *actions[] = {"update", "client-info", "tools-help", "change-mode", NULL};
 
 static const char *help_usage = "cmdfu [-h | --help] [-v <level> | --verbose <level>] [-V | --version] [-R | --release-info] [<action>]";
 static const char *help_update = "cmdfu [--help | -h] [--verbose <level> | -v <level>] [--config-file <file> | -c <file>] "
     "update --tool <tool> --image <image> [<tools-args>...]";
 static const char *help_client_info = "cmdfu [--help | -h] [--verbose <level> | -v <level>] [--config-file <file> | -c <file>] "
     "client-info --tool <tool> [<tools-args>...]";
+static const char *help_change_mode = "cmdfu [--help | -h] [--verbose <level> | -v <level>] [--config-file <file> | -c <file>] "
+    "change-mode --tool <tool> [<tools-args>...]";
 static const char *help_tools = "cmdfu [--help | -h] [--verbose <level> | -v <level>] tools-help";
 static const char *help_common =
     "Actions\n"
@@ -23,6 +25,7 @@ static const char *help_common =
     "    client-info:    Get MDFU client information\n"
     "    tools-help:     Get help on tool specific parameters\n"
     "    update:         Perform a firmware update\n"
+    "    change-mode:    Change bootloader mode to application\n"
     "\n"
     "    -h, --help      Show this help message and exit\n"
     "\n"
@@ -109,6 +112,8 @@ static void print_help_for_action(action_t action){
         printf("%s\n", help_client_info);
     } else if(args.action == ACTION_TOOLS_HELP){
         printf("%s\n", help_tools);
+    } else if(args.action == ACTION_CHANGE_MODE){
+        printf("%s\n", help_change_mode);
     }
 
 }
