@@ -22,6 +22,7 @@
 #include "mdfu/mdfu.h"
 #include "mdfu/logging.h"
 #include "mdfu/image_reader.h"
+#include "mdfu/image_writer.h"
 #include "mdfu/error.h"
 
 /**
@@ -214,6 +215,7 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
 int mdfu_start_transfer(void);
 int mdfu_end_transfer(void);
 ssize_t mdfu_write_chunk(const image_reader_t* image_reader, int size);
+ssize_t mdfu_read_chunk(const image_writer_t* image_writer, int size);
 int mdfu_get_image_state(mdfu_image_state_t *state);
 int mdfu_change_mode(void);
 
@@ -447,6 +449,69 @@ int mdfu_run_update(const image_reader_t *image_reader){
 }
 
 /**
+ * @brief Runs the MDFU firmware dump process using the provided image writer.
+ *
+ * This function performs a series of steps to download the firmware, including
+ * retrieving client information, checking protocol version compatibility,
+ * setting inter-transaction delays, and reading data chunks. It ensures that
+ * the image state is valid before finalizing the transfer.
+ *
+ * @param image_writer Pointer to the image writer structure that provides the
+ *                     interface for writing the firmware image.
+ * @return int Returns 0 on success, or -1 on failure.
+ */
+int mdfu_run_dump(const image_writer_t *image_writer){
+    mdfu_image_state_t state;
+    ssize_t size;
+
+    if(mdfu_get_client_info(&local_client_info) < 0){
+        goto err_exit;
+    }
+    if(version_check(local_client_info.version.major, local_client_info.version.minor, local_client_info.version.patch) < 0)
+    {
+        ERROR("MDFU client protocol version %d.%d.%d not supported. "\
+            "This MDFU host implements MDFU protocol version %s. "\
+            "Please update cmdfu to the latest version.", local_client_info.version.major, local_client_info.version.minor, local_client_info.version.patch, MDFU_PROTOCOL_VERSION);
+        goto err_exit;
+    }
+    if(MDFU_MAX_COMMAND_DATA_LENGTH < local_client_info.buffer_size){
+        ERROR("MDFU host protocol buffers are configured for a maximum command data length of %d but the client requires %d", MDFU_MAX_COMMAND_DATA_LENGTH, local_client_info.buffer_size);
+        goto err_exit;
+    }
+    if (mdfu_transport->ioctl != NULL &&
+            0 > mdfu_transport->ioctl(TRANSPORT_IOC_INTER_TRANSACTION_DELAY, (float) local_client_info.inter_transaction_delay * ITD_SECONDS_PER_LSB)) {
+            goto err_exit;
+    }
+    client_info_valid = true;
+    if(mdfu_start_transfer() < 0){
+        goto err_exit;
+    }
+
+    do{
+        size = mdfu_read_chunk(image_writer, local_client_info.buffer_size);
+        if(size < 0){
+            goto err_exit;
+        }
+    // last data chunck read will be zero or less than client buffer size
+    }while(size == local_client_info.buffer_size);
+
+    if(mdfu_get_image_state(&state) < 0){
+        goto err_exit;
+    }
+    if(state != VALID){
+        ERROR("Image state %d is invalid", state);
+        goto err_exit;
+    }
+    if(mdfu_end_transfer() < 0){
+        goto err_exit;
+    }
+    return 0;
+
+    err_exit:
+    return -1;
+}
+
+/**
  * @brief Runs the MDFU change mode process.
  *
  * This function performs a series of steps to change bootloader mode, including
@@ -597,6 +662,42 @@ ssize_t mdfu_write_chunk(const image_reader_t *image_reader, int size){
         }
     }
     return read_size;
+}
+
+/**
+ * @brief Reads a chunk of firmware update image data.
+ *
+ * This function sends a command to read a chunk of data from the client and writes it
+ * to the provided image writer.
+ *
+ * @param[in] image_writer Pointer to an image writer structure.
+ * @param[in] size The size of the data chunk to read and write.
+ * @return The number of bytes read and written on success, -1 on failure.
+ */
+ssize_t mdfu_read_chunk(const image_writer_t *image_writer, int size){
+    mdfu_packet_t mdfu_cmd_packet = {
+        .command = READ_CHUNK,
+        .sync = false,
+        .data_length = 0
+    };
+    mdfu_packet_t mdfu_status_packet;
+    mdfu_get_packet_buffer(&mdfu_cmd_packet, &mdfu_status_packet);
+
+    // Send the command to request a chunk from the client
+    if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
+        return -1;
+    }
+
+    // Write the received data to the image writer
+    ssize_t write_size = image_writer->write(mdfu_status_packet.data, mdfu_status_packet.data_length);
+    if(write_size < 0){
+        ERROR("%s", strerror(errno));
+        return -1;
+    }
+    if(write_size == 0){
+        DEBUG("No more data to write from client");
+    }
+    return write_size;
 }
 
 /**

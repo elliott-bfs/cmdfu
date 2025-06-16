@@ -15,7 +15,8 @@ typedef enum {
   ACTION_CLIENT_INFO = 1,
   ACTION_TOOLS_HELP = 2,
   ACTION_CHANGE_MODE = 3,
-  ACTION_NONE = 4
+  ACTION_DUMP = 4,
+  ACTION_NONE = 5
 } action_t;
 
 /**
