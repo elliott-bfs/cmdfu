@@ -514,7 +514,9 @@ int mdfu_get_image_state(mdfu_image_state_t *state){
  * @brief Writes a chunk of firmware update image data.
  *
  * This function reads a chunk of data from the provided image reader and sends a WRITE_CHUNK
- * command with the read data.
+ * command with the read data. Call this function repeatedly to send image data chunks
+ * until the whole image is transferred. For the last data chunk the function will return
+ * less than the requested size.
  *
  * @param[in] image_reader Pointer to an image reader structure.
  * @param[in] size The size of the data chunk to read and write.
@@ -534,9 +536,11 @@ ssize_t mdfu_write_chunk(const image_reader_t *image_reader, int size){
         ERROR("%s", strerror(errno));
         return -1;
     }
-    mdfu_cmd_packet.data_length = (uint16_t) read_size;
-    if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
-        return -1;
+    if(0 != read_size){
+        mdfu_cmd_packet.data_length = (uint16_t) read_size;
+        if(mdfu_send_cmd(&mdfu_cmd_packet, &mdfu_status_packet) < 0){
+            return -1;
+        }
     }
     return read_size;
 }
@@ -553,7 +557,8 @@ ssize_t mdfu_write_chunk(const image_reader_t *image_reader, int size){
  */
 int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_packet){
     int status;
-    int packet_size;
+    int cmd_packet_size;
+    int status_packet_size;
     int retries = send_retries;
     float cmd_timeout = MDFU_CLIENT_INFO_CMD_TIMEOUT;
 
@@ -565,22 +570,22 @@ int mdfu_send_cmd(mdfu_packet_t *mdfu_cmd_packet, mdfu_packet_t *mdfu_status_pac
     }
     mdfu_cmd_packet->sequence_number = sequence_number;
 
-    packet_size = (int) mdfu_encode_cmd_packet(mdfu_cmd_packet);
+    cmd_packet_size = (int) mdfu_encode_cmd_packet(mdfu_cmd_packet);
 
     DEBUG("Sending MDFU command packet");
     mdfu_log_packet(mdfu_cmd_packet, MDFU_CMD);
 
     while(retries){
         retries -= 1;
-        status = mdfu_transport->write(packet_size, mdfu_cmd_packet->buf);
+        status = mdfu_transport->write(cmd_packet_size, mdfu_cmd_packet->buf);
         if(status < 0){
             continue;
         }
-        status = mdfu_transport->read(&packet_size, mdfu_status_packet->buf, cmd_timeout);
+        status = mdfu_transport->read(&status_packet_size, mdfu_status_packet->buf, cmd_timeout);
         if(status < 0){
             continue;
         }
-        mdfu_decode_packet(mdfu_status_packet, MDFU_STATUS, packet_size);
+        mdfu_decode_packet(mdfu_status_packet, MDFU_STATUS, status_packet_size);
         DEBUG("Received MDFU status packet");
         mdfu_log_packet(mdfu_status_packet, MDFU_STATUS);
 

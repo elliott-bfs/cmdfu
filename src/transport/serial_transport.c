@@ -97,8 +97,11 @@ static int discard_until(uint8_t code, timeout_t timer)
     {
         status = transport_mac.read(1, &data);
         assert(status <= 1);
+        // if we have an error e.g. buffer overrun or framing error
+        // keep going to dispose of any characters until we time out
+        // so that we can have a fresh start on the next attempt
         if(status < 0){
-            continue_discarding = false;
+            continue_discarding = true;
         }else if((status == 1) && (data == code)){
                 status = 0;
                 continue_discarding = false;
@@ -353,9 +356,15 @@ static int read(int *size, uint8_t *data, float timeout){
         return (int) status;
     }
     *size = (int) status;
-
+    // Minimum status response should be 1 byte status and two bytes for CRC
+    if(*size < 3){
+        DEBUG("Serial Transport: Received invalid frame with length %d but minimum is 3", *size);
+        return -1;
+    }
     uint16_t frame_checksum = *((uint16_t *) &data[*size - 2]);
+#ifdef MDFU_LOG_TRANSPORT_FRAME
     log_frame(*size, data, frame_checksum);
+#endif
     checksum = calculate_crc16(*size - 2, data);
     if(checksum != frame_checksum){
         DEBUG("Serial Transport: Frame check sequence verification failed, calculated 0x%04x but got 0x%04x\n", checksum, frame_checksum);
@@ -408,8 +417,9 @@ static int write(int size, uint8_t *data){
     code = FRAME_END_CODE;
     status = transport_mac.write(1, &code);
 
+#ifdef MDFU_LOG_TRANSPORT_FRAME
     log_frame(size, data, frame_check_sequence);
-
+#endif
     exit:
         return status;
 }

@@ -11,8 +11,10 @@ cmake -B build
 
 - MDFU_MAX_COMMAND_DATA_LENGTH: Defines the maximum MDFU command data length that is supported. This must be at least the same size as the MDFU client reported size.
 - MDFU_MAX_RESPONSE_DATA_LENGTH: Defines the maximumd MDFU response data length that is supported.
+- MDFU_LOG_TRANSPORT_FRAME: When defined and verbose level for logging is set to debug, the frames on the transport layer will be logged. Do not use for non-buffered mac layers or loggers since the logging can take some time depending on how this is implemented so the host might be late to receive the next frame after logging the sent frame.
 
-Creating the build tree and configuring maximum MDFU command data size.
+
+Example for creating the build tree and configuring maximum MDFU command data size.
 ```bash
 cmake -B build -D MDFU_MAX_COMMAND_DATA_LENGTH=1024
 ```
