@@ -12,11 +12,19 @@ typedef struct {
 }tool_t;
 
 typedef enum tool_type {
-    TOOL_SERIAL = 0,
-    TOOL_NETWORK = 1,
-    TOOL_SPIDEV = 2,
-    TOOL_I2CDEV = 3,
-    TOOL_NONE = 4
+#ifdef USE_TOOL_SERIAL
+    TOOL_SERIAL,
+#endif
+#ifdef USE_TOOL_NETWORK
+    TOOL_NETWORK,
+#endif
+#ifdef USE_TOOL_SPI
+    TOOL_SPIDEV,
+#endif
+#ifdef USE_TOOL_I2C
+    TOOL_I2CDEV,
+#endif
+    TOOL_NONE
 }tool_type_t;
 
 extern const char *tool_names[];

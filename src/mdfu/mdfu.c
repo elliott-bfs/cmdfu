@@ -12,6 +12,9 @@
         #include <endian.h>
     #else
         #include "mdfu/endian.h"
+        #ifdef _WIN32
+            #undef ERROR
+        #endif
     #endif
 #endif
 #include <stdlib.h>

@@ -1,6 +1,7 @@
 #ifndef CMDFU_H
 #define CMDFU_H
 
+#include <stdbool.h>
 #include "mdfu/tools/tools.h"
 
 /**
